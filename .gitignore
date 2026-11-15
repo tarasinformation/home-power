@@ -1,5 +1,6 @@
 # Секрети й локальні прив'язки — ніколи не в репозиторій
 firmware/include/secrets.h
+firmware/include/secrets.h.*
 web/.env*
 web/.vercel/
 web/.convex/
