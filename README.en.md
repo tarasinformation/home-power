@@ -86,7 +86,7 @@ pio run && python3 ota_upload.py <board-address>
 - **The update password** is created by `make_secrets.py` and kept in the macOS keychain; `secrets.h` gets its SHA-256. If you already have a `secrets.h`, `python3 make_secrets.py --ota-only` is enough: the rest of the file stays untouched. Without the `OTA_PASSWORD_SHA256` line the firmware builds with Wi-Fi updates disabled.
 - **The board address** comes from the argument or the `BOARD_IP` environment variable; it is not in the repository. The script reads the password from the keychain itself, so it never shows up on screen or on the command line.
 - **Rollback.** New firmware has 5 minutes to join Wi-Fi and send a report (or at least stay reachable on the network). If it does not, hangs or reboots before that, the board returns to the previous firmware by itself. A power cut in those minutes is also a rollback: send the update again. Until the new firmware is confirmed, the board accepts no further update.
-- **Verification.** At the end the script asks the board (UDP 3233: version, build id, state, no secrets) which build is running and reports success only when it is the build just sent and the board has confirmed it.
+- **Verification.** At the end the script asks the board (UDP 3233: version, build id, state, uptime and chip temperature, no secrets) which build is running and reports success only when it is the build just sent and the board has confirmed it.
 
 ## Security
 

@@ -36,7 +36,7 @@
 #define OTA_PASSWORD_SHA256 "" // порожньо — оновлення по Wi-Fi вимкнено
 #endif
 
-static const char *FW_VERSION = "0.6";
+static const char *FW_VERSION = "0.6.1";
 static IPAddress target; // адреса індикатора з INDICATOR_IP у secrets.h
 static const uint32_t CYCLE_MS = 20000;           // період перевірки
 // Звіт надсилається одразу при зміні стану світла чи заряду станції, а без змін — раз на хвилину.
@@ -196,9 +196,11 @@ static void handleInfo() {
     // Мітка збірки: перші 8 байтів SHA-256 файлу ELF, ті самі, що у firmware.bin за зсувом 0xB0.
     const uint8_t *id = esp_app_get_description()->app_elf_sha256;
     infoUdp.beginPacket(infoUdp.remoteIP(), infoUdp.remotePort());
-    infoUdp.printf("fw=%s id=%02x%02x%02x%02x%02x%02x%02x%02x slot=%s state=%s up=%lu", FW_VERSION, id[0], id[1],
-                   id[2], id[3], id[4], id[5], id[6], id[7], esp_ota_get_running_partition()->label,
-                   pendingVerify ? "pending" : "valid", (unsigned long)(esp_timer_get_time() / 1000000));
+    // temp: температура кристала процесора (вбудований датчик), а не корпусу плати.
+    infoUdp.printf("fw=%s id=%02x%02x%02x%02x%02x%02x%02x%02x slot=%s state=%s up=%lu temp=%.1f", FW_VERSION, id[0],
+                   id[1], id[2], id[3], id[4], id[5], id[6], id[7], esp_ota_get_running_partition()->label,
+                   pendingVerify ? "pending" : "valid", (unsigned long)(esp_timer_get_time() / 1000000),
+                   temperatureRead());
     infoUdp.endPacket();
     infoUdp.clear();
 }
