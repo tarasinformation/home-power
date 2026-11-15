@@ -1,0 +1,20 @@
+# Секрети й локальні прив'язки — ніколи не в репозиторій
+firmware/include/secrets.h
+web/.env*
+web/.vercel/
+web/.convex/
+*.local
+
+# Результати збірки
+firmware/.pio/
+web/node_modules/
+web/dist/
+
+# Службові файли
+.DS_Store
+web/AGENTS.md
+web/CLAUDE.md
+web/.agents/
+web/.claude/
+web/skills-lock.json
+web/convex/_generated/ai/
