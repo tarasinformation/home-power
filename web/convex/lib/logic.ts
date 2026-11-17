@@ -257,7 +257,8 @@ export type SegKind = EventKind;
 /** Проміжок часу з одним станом. */
 export type Segment = { from: number; to: number; kind: SegKind };
 /** Один календарний день за київським часом. Майбутня частина дня сегментів не має. */
-export type DayRow = { start: number; end: number; segments: Segment[]; off: number };
+/** `on` і `off`: скільки часу за цю добу світло було й не було (без проміжків «немає зв'язку» та без даних). */
+export type DayRow = { start: number; end: number; segments: Segment[]; on: number; off: number };
 
 const HOUR = 3600 * 1000;
 const clockFmt = new Intl.DateTimeFormat("en-GB", {
@@ -319,8 +320,8 @@ export function days(state: DeviceState | null, events: PowerEvent[], now: numbe
     const segments = all
       .filter(s => s.to > start && s.from < end)
       .map(s => ({ from: Math.max(s.from, start), to: Math.min(s.to, end), kind: s.kind }));
-    const off = segments.reduce((sum, s) => sum + (s.kind === "off" ? s.to - s.from : 0), 0);
-    rows.push({ start, end, segments, off });
+    const total = (kind: SegKind) => segments.reduce((sum, s) => sum + (s.kind === kind ? s.to - s.from : 0), 0);
+    rows.push({ start, end, segments, on: total("on"), off: total("off") });
     start = dayStart(start - 2 * HOUR);
   }
   return rows;

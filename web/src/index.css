@@ -738,7 +738,7 @@ p {
 }
 .chart-row {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 84px;
+  grid-template-columns: 54px minmax(0, 1fr) 96px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -791,14 +791,30 @@ button.chart-row:active {
   text-align: right;
   white-space: nowrap;
 }
-.sum small {
+.sum {
+  display: grid;
+  gap: 3px;
+}
+/* Мітки кольору стоять в одну колонку, числа вирівняні праворуч. */
+.tot {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 3px;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--faint);
+  justify-content: space-between;
+  gap: 6px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+.dot-on {
+  background: var(--on-tile);
+  box-shadow: inset 0 0 0 1px var(--on-tile-line);
+}
+.dot-off {
+  background: var(--off-tile);
+  box-shadow: inset 0 0 0 1px var(--off-tile-line);
 }
 .lanes.with-plan {
   display: grid;

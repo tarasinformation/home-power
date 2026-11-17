@@ -361,14 +361,18 @@ test("графік: стани розкладаються по днях, від�
   assert.equal(today.segments[0].from, today.start);
   assert.equal(today.off, 90 * 60_000);
   assert.equal(today.segments.at(-1)!.to, w.clock);
+  // Світло й темрява разом покривають усю минулу частину доби, коли зв'язок був.
+  assert.equal(today.on + today.off, w.clock - today.start);
   // Учора (14.11): до 20:00 даних немає, 20:00-23:00 є, 23:00-24:00 немає.
   assert.deepEqual(yesterday.segments.map(s => s.kind), ["on", "off"]);
   assert.equal(yesterday.segments[0].from, t0);
   assert.equal(yesterday.segments[1].to, yesterday.end);
   assert.equal(yesterday.off, 60 * 60_000);
+  assert.equal(yesterday.on, 180 * 60_000);
   // Позавчора даних немає зовсім.
   assert.deepEqual(before.segments, []);
   assert.equal(before.off, 0);
+  assert.equal(before.on, 0);
   // Сума по днях дорівнює сумі в таблиці відключень.
   assert.equal(today.off + yesterday.off, w.view().total);
   assert.equal(dayLabel(today.start, w.clock), "сьогодні");
@@ -580,6 +584,7 @@ test("день по годинах: минуле — факт, майбутнє 
   const row = {
     start: d0,
     end: d0 + 24 * H,
+    on: 0,
     off: 0,
     segments: [
       { from: d0 + 5 * H, to: d0 + 7 * H, kind: "on" as const },
@@ -620,7 +625,7 @@ test("день по годинах: минуле — факт, майбутнє 
   const extra = hourCells({ ...row, segments: [{ from: d0 + 12 * H, to: d0 + 13 * H, kind: "off" as const }] }, plan, now);
   assert.equal(extra[12].mismatch, H);
   // Завтра графіка ще немає: усе «немає даних».
-  const tomorrow = hourCells({ start: d0 + 24 * H, end: d0 + 48 * H, off: 0, segments: [] }, [{ start: d0 + 24 * H, status: "waiting", slots: [], updated: null }], now);
+  const tomorrow = hourCells({ start: d0 + 24 * H, end: d0 + 48 * H, on: 0, off: 0, segments: [] }, [{ start: d0 + 24 * H, status: "waiting", slots: [], updated: null }], now);
   assert.ok(tomorrow.every(c => c.parts.length === 1 && c.parts[0].kind === "none" && !c.scheduled));
 });
 

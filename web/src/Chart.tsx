@@ -1,11 +1,8 @@
-import { Calendar } from "./Icons";
 import {
   dayLabel,
   dur,
   forecastFor,
-  hours,
   planFor,
-  planTotal,
   wallFrac,
   type DayRow,
   type PlanDay,
@@ -46,14 +43,13 @@ export function Chart({ rows, now, plan, onPick }: { rows: DayRow[]; now: number
         const pos = (t: number) => wallFrac(t, row.start, row.end) * 100;
         const isToday = now >= row.start && now < row.end;
         const slots = planFor(plan, row.start);
-        const planned = planTotal(plan, row.start);
         const future = row.start > now;
         return (
           <button
             type="button"
             className="chart-row"
             key={row.start}
-            aria-label={`${dayLabel(row.start, now)}: без світла ${row.off > 0 ? dur(row.off) : "не було"}`}
+            aria-label={`${dayLabel(row.start, now)}: ${future ? "майбутній день" : !row.segments.length ? "даних немає" : `світло ${short(row.on)}, без світла ${short(row.off)}`}`}
             onClick={() => onPick(row.start)}
           >
             <span className="day">{shortDay(row.start, now)}</span>
@@ -78,13 +74,18 @@ export function Chart({ rows, now, plan, onPick }: { rows: DayRow[]; now: number
               {isToday && <span className="now" style={{ left: `${pos(now)}%` }} aria-hidden="true" />}
             </div>
             </div>
-            <span className="sum">
-              {!future && (row.off > 0 ? dur(row.off) : row.segments.length ? "—" : "")}
-              {hasPlan && (planned > 0 || future) && (
-                <small>
-                  <Calendar size={11} />
-                  {planned > 0 ? hours(planned) : "—"}
-                </small>
+            <span className="sum" aria-hidden="true">
+              {!future && row.on > 0 && (
+                <span className="tot">
+                  <i className="dot dot-on" />
+                  {short(row.on)}
+                </span>
+              )}
+              {!future && row.off > 0 && (
+                <span className="tot">
+                  <i className="dot dot-off" />
+                  {short(row.off)}
+                </span>
               )}
             </span>
           </button>
@@ -92,6 +93,12 @@ export function Chart({ rows, now, plan, onPick }: { rows: DayRow[]; now: number
       })}
     </section>
   );
+}
+
+/** Тривалість для вузької колонки: «19 год 29 хв», «<1 хв». */
+function short(ms: number): string {
+  if (ms <= 0) return "0";
+  return ms < 60_000 ? "<1 хв" : dur(ms);
 }
 
 const wd = new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", weekday: "short" });

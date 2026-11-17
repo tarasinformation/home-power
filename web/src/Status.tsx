@@ -224,5 +224,5 @@ function withTomorrow(rows: DayRow[], plan: PlanDay[], now: number): DayRow[] {
   if (!plan.length) return rows;
   const start = dayStart(dayStart(now) + 26 * 3600_000);
   const end = dayStart(start + 26 * 3600_000);
-  return [{ start, end, segments: [], off: 0 }, ...rows];
+  return [{ start, end, segments: [], on: 0, off: 0 }, ...rows];
 }
