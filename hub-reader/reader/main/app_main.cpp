@@ -40,12 +40,13 @@
 
 #include "hub_subscription.h"
 #include "ota_server.h"
-#include "secrets.h" // HOME_URL, HOME_TOKEN, OTA_KEY
+#include "power_monitor.h"
+#include "secrets.h" // HOME_URL, HOME_TOKEN, OTA_KEY; для монітора світла ще REPORT_URL, DEVICE_TOKEN, INDICATOR_IP
 
 static const char *TAG = "hub_reader";
 
 #ifndef FW_VERSION
-#define FW_VERSION "0.3.1"
+#define FW_VERSION "0.4.1"
 #endif
 #define HUB_NODE_ID 2 // номер, під яким плата додала хаб (tools/hub_pair.py)
 
@@ -63,6 +64,15 @@ static const char *TAG = "hub_reader";
 #define WILDCARD_ENDPOINT 0xFFFF
 
 #define NONE INT32_MIN
+
+// Монітор світла (power_monitor.cpp): 0 — «тінь», плата лише міряє й показує результат у GET /info;
+// 1 — сама надсилає стан світла й заряд станції на POST /report замість окремої плати-монітора.
+// Вмикати 1 лише тоді, коли стару плату-монітор вимкнено: два джерела звітів заважали б одне одному.
+#ifndef POWER_REPORT
+#define POWER_REPORT 0
+#endif
+#define POWER_HEARTBEAT_MS (60 * 1000)      // без змін звіт про світло раз на хвилину
+#define SOC_MAX_AGE_MS (5 * 60 * 1000)      // старіший заряд станції не надсилаємо
 
 #define SUB_MIN_INTERVAL_S 5
 #define SUB_MAX_INTERVAL_S 60
@@ -209,13 +219,13 @@ static esp_err_t on_http_event(esp_http_client_event_t *event)
     return ESP_OK;
 }
 
-/** Надсилає тіло звіту. Повертає код HTTP або -1, якщо з'єднатися не вдалося. */
-static int post_report(const char *body, response_t *response)
+/** Надсилає тіло звіту на `url` з ключем `bearer`. Повертає код HTTP або -1, якщо з'єднатися не вдалося. */
+static int post_json(const char *url, const char *bearer, const char *body, response_t *response)
 {
     response->len = 0;
     response->text[0] = 0;
     esp_http_client_config_t config = {};
-    config.url = HOME_URL;
+    config.url = url;
     config.method = HTTP_METHOD_POST;
     config.timeout_ms = 15000;
     config.crt_bundle_attach = esp_crt_bundle_attach;
@@ -225,7 +235,7 @@ static int post_report(const char *body, response_t *response)
     if (!client) {
         return -1;
     }
-    esp_http_client_set_header(client, "Authorization", "Bearer " HOME_TOKEN);
+    esp_http_client_set_header(client, "Authorization", bearer);
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, body, strlen(body));
     esp_err_t err = esp_http_client_perform(client);
@@ -296,6 +306,15 @@ static void reporter_task(void *arg)
     int32_t sent_hum = NONE;
     static char body[448];
     static response_t response;
+#if POWER_REPORT
+    static char pw_body[256];
+    bool pw_sent_once = false;
+    bool pw_sent_power = true;
+    bool pw_attempted = false;
+    int pw_sent_soc = -1;
+    uint32_t pw_last_beat = 0;
+    uint32_t pw_last_attempt = 0;
+#endif
 
     esp_task_wdt_add(nullptr); // якщо ця задача зависне довше за CONFIG_ESP_TASK_WDT_TIMEOUT_S, плата перезапуститься
 
@@ -342,6 +361,46 @@ static void reporter_task(void *arg)
             restart("пів години без вдалого звіту на сайт");
         }
 
+#if POWER_REPORT
+        // Звіт про світло: одразу при зміні стану світла чи заряду станції, без змін — раз на хвилину.
+        // Іде тією самою задачею, що й звіт клімату: два шифровані з'єднання водночас не відкриваються.
+        {
+            power_state_t ps;
+            power_monitor_get(&ps);
+            const bool due = ps.enabled && ps.known &&
+                             (!pw_sent_once || ps.power != pw_sent_power || ps.soc != pw_sent_soc ||
+                              now - pw_last_beat >= POWER_HEARTBEAT_MS);
+            if (due && (!pw_attempted || now - pw_last_attempt >= 5000)) {
+                int level = 0;
+                const bool has_rssi = wifi_associated(&level);
+                // "ago": скільки секунд тому зник перший ping. Сервер записує початок відключення цим часом,
+                // бо саме відключення оголошується лише після двох невдалих циклів.
+                const uint32_t ago = ps.power ? 0 : (now - ps.first_fail_ms) / 1000;
+                int n = snprintf(pw_body, sizeof(pw_body),
+                                 "{\"power\":%s,\"rssi\":%d,\"uptime\":%" PRIu32 ",\"fw\":\"" FW_VERSION "\",\"ago\":%" PRIu32,
+                                 ps.power ? "true" : "false", has_rssi ? level : 0,
+                                 (uint32_t)(esp_timer_get_time() / 1000000), ago);
+                if (ps.soc >= 0 && now - ps.soc_ms < SOC_MAX_AGE_MS) {
+                    n += snprintf(pw_body + n, sizeof(pw_body) - n, ",\"soc\":%d,\"socAge\":%" PRIu32 ",\"socRssi\":%d",
+                                  ps.soc, (now - ps.soc_ms) / 1000, ps.soc_rssi);
+                }
+                snprintf(pw_body + n, sizeof(pw_body) - n, "}");
+                pw_attempted = true;
+                pw_last_attempt = now;
+                const int status = post_json(REPORT_URL, "Bearer " DEVICE_TOKEN, pw_body, &response);
+                esp_task_wdt_reset();
+                printf("hub_reader: світло %s, заряд %d%%: HTTP %d\n", ps.power ? "є" : "немає", ps.soc, status);
+                if (status == 200) {
+                    pw_sent_once = true;
+                    pw_sent_power = ps.power;
+                    pw_sent_soc = ps.soc;
+                    pw_last_beat = now;
+                    report_ok = now_ms();
+                }
+            }
+        }
+#endif // POWER_REPORT
+
         // Звіт: повний на старті, раз на 5 хв і на вимогу сервера; позачерговий — коли покази стрибнули.
         const int32_t temp = s_temp;
         const int32_t hum = s_hum;
@@ -362,7 +421,7 @@ static void reporter_task(void *arg)
         build_report(body, sizeof(body), full_due ? "full" : "delta", boot, ++seq, hub, temp, hum);
         attempted = true;
         last_attempt = now;
-        const int status = post_report(body, &response);
+        const int status = post_json(HOME_URL, "Bearer " HOME_TOKEN, body, &response);
         esp_task_wdt_reset();
         // printf, а не ESP_LOG: журнал у цій збірці обрізано до попереджень, а цей рядок потрібен завжди.
         printf("hub_reader: звіт %s №%" PRIu32 ": HTTP %d, хаб %s, темп %" PRId32 ", волог %" PRId32 ", купа %u (мін %u)\n",
@@ -450,4 +509,5 @@ extern "C" void app_main()
         esp_matter::controller::matter_controller_client::get_instance().setup_commissioner();
     }
     ota_server_start(FW_VERSION);
+    power_monitor_start();
 }

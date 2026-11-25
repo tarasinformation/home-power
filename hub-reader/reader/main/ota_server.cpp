@@ -30,6 +30,7 @@
 #include <mbedtls/md.h>
 #include <mbedtls/sha256.h>
 
+#include "power_monitor.h"
 #include "secrets.h" // OTA_KEY
 
 static const char *TAG = "ota";
@@ -76,13 +77,25 @@ static esp_err_t reply(httpd_req_t *req, const char *status, const char *text)
 
 static esp_err_t info_get(httpd_req_t *req)
 {
-    char body[200];
+    char body[420];
     const esp_partition_t *running = esp_ota_get_running_partition();
-    snprintf(body, sizeof(body),
-             "{\"fw\":\"%s\",\"uptime\":%" PRId64 ",\"heap\":%u,\"heap_min\":%u,\"reset\":%d,\"slot\":\"%s\",\"pending\":%s}",
-             s_fw_version, esp_timer_get_time() / 1000000, (unsigned)esp_get_free_heap_size(),
-             (unsigned)esp_get_minimum_free_heap_size(), (int)esp_reset_reason(), running ? running->label : "?",
-             ota_pending_verify() ? "true" : "false");
+    int n = snprintf(body, sizeof(body),
+                     "{\"fw\":\"%s\",\"uptime\":%" PRId64 ",\"heap\":%u,\"heap_min\":%u,\"reset\":%d,\"slot\":\"%s\",\"pending\":%s",
+                     s_fw_version, esp_timer_get_time() / 1000000, (unsigned)esp_get_free_heap_size(),
+                     (unsigned)esp_get_minimum_free_heap_size(), (int)esp_reset_reason(), running ? running->label : "?",
+                     ota_pending_verify() ? "true" : "false");
+    // Монітор світла: що плата зараз думає про світло й заряд станції (для звірки зі старою платою).
+    power_state_t ps;
+    power_monitor_get(&ps);
+    if (ps.enabled) {
+        const uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+        n += snprintf(body + n, sizeof(body) - n,
+                      ",\"power\":%s,\"fails\":%d,\"cycles\":%u,\"ble\":%s,\"soc\":%d,\"soc_age\":%d,\"soc_rssi\":%d",
+                      !ps.known ? "null" : ps.power ? "true" : "false", ps.failed_cycles, (unsigned)ps.cycles,
+                      ps.ble_ready ? "true" : "false", ps.soc, ps.soc >= 0 ? (int)((now - ps.soc_ms) / 1000) : -1,
+                      ps.soc_rssi);
+    }
+    snprintf(body + n, sizeof(body) - n, "}");
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }

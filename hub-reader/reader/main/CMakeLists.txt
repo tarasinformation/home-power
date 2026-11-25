@@ -18,3 +18,13 @@ if(CONFIG_SPIFFS_ATTESTATION_TRUST_STORE)
 endif()
 
 target_compile_options(${COMPONENT_LIB} PRIVATE "-DCHIP_HAVE_CONFIG_H")
+
+# Перевірочні збірки (у звичайній роботі ці змінні середовища не задаються):
+#   HUB_READER_TEST_INDICATOR — адреса замість справжнього індикатора світла;
+#   HUB_READER_FW_VERSION — інша позначка версії, щоб відрізнити перевірочний образ.
+if(DEFINED ENV{HUB_READER_TEST_INDICATOR})
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE "INDICATOR_IP_TEST=\"$ENV{HUB_READER_TEST_INDICATOR}\"")
+endif()
+if(DEFINED ENV{HUB_READER_FW_VERSION})
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE "FW_VERSION=\"$ENV{HUB_READER_FW_VERSION}\"")
+endif()

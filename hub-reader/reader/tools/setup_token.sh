@@ -10,6 +10,8 @@ set -euo pipefail
 
 HOME_SERVICE="home-power-home-token"
 OTA_SERVICE="hub-reader-ota-key"
+DEVICE_SERVICE="home-power-device-token"
+MONITOR_SECRETS="$(cd "$(dirname "$0")/../../.." && pwd)/firmware/include/secrets.h"
 WEB_DIR="$(cd "$(dirname "$0")/../../../web" && pwd)"
 SECRETS_DIR="$HOME/.config/esp-hub-reader/secrets"
 URL_FILE="$HOME/.config/esp-hub-reader/home-url.txt"
@@ -53,5 +55,17 @@ umask 077
     echo "#define HOME_URL \"$HOME_URL\""
     printf '#define HOME_TOKEN "%s"\n' "$(security find-generic-password -s "$HOME_SERVICE" -w | tr -d '\n')"
     printf '#define OTA_KEY "%s"\n' "$(security find-generic-password -s "$OTA_SERVICE" -w | tr -d '\n')"
+    # Монітор світла на цій самій платі (необов'язково): адреса індикатора й номер станції беруться
+    # з налаштувань прошивки монітора (../../firmware/include/secrets.h), ключ звітів — зі зв'язки ключів.
+    if [ -f "$MONITOR_SECRETS" ] && security find-generic-password -s "$DEVICE_SERVICE" >/dev/null 2>&1; then
+        echo "#define REPORT_URL \"${HOME_URL%/home}/report\""
+        printf '#define DEVICE_TOKEN "%s"\n' "$(security find-generic-password -s "$DEVICE_SERVICE" -w | tr -d '\n')"
+        grep -E '^#define (INDICATOR_IP|ECOFLOW_SN_PREFIX|ECOFLOW_SN_SUFFIX) ' "$MONITOR_SECRETS"
+        # Чи плата сама звітує про світло (замість окремої плати-монітора): файл-позначка
+        # ~/.config/esp-hub-reader/power-report. Створіть його, коли стару плату-монітор вимкнено.
+        if [ -f "$HOME/.config/esp-hub-reader/power-report" ]; then
+            echo "#define POWER_REPORT 1"
+        fi
+    fi
 } > "$SECRETS_DIR/secrets.h"
 echo "3/3 Файл для прошивки створено: $SECRETS_DIR/secrets.h"
