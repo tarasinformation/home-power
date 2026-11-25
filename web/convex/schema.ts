@@ -52,6 +52,10 @@ export default defineSchema({
     temp: v.union(v.number(), v.null()),
     hum: v.union(v.number(), v.null()),
     climateSeen: v.union(v.number(), v.null()),
+    // Діагностика стабільності. Необов'язкові: старі документи й старі прошивки їх не мають.
+    bootAt: v.optional(v.union(v.number(), v.null())),
+    rst: v.optional(v.union(v.number(), v.null())),
+    heapMin: v.optional(v.union(v.number(), v.null())),
   }),
 
   /** Історія температури (°C) й вологості (%) вдома: запис при зміні, але не рідше ніж раз на 15 хв. */

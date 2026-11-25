@@ -25,7 +25,7 @@ import {
   type SocSample,
   type View,
 } from "../convex/lib/logic";
-import { climateView, deg, weatherFresh, weatherText, type ClimateSample, type HomePublic } from "../convex/lib/home";
+import { climateView, crashed, deg, weatherFresh, weatherText, type ClimateSample, type HomePublic } from "../convex/lib/home";
 
 /** Поточний час, що оновлюється кожні 15 с: тривалість росте, а «немає зв'язку» з'являється само. */
 function useNow(): number {
@@ -129,6 +129,8 @@ export function StatusView({
     v.lastSeen !== null && `сигнал плати ${time(v.lastSeen)}`,
     v.rssi !== null && `Wi-Fi ${v.rssi} dBm`,
     v.fw && `прошивка ${v.fw}`,
+    // Плата-читач хаба: версія і відколи працює без перезапуску — головний показник її стабільності.
+    home?.fw && `читач ${home.fw}${home.bootAt ? `, працює з ${time(home.bootAt)}` : ""}${crashed(home.rst) ? " (після збою)" : ""}`,
     who,
   ].filter(Boolean);
 

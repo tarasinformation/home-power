@@ -20,6 +20,8 @@ export const report = internalMutation({
     hub: v.boolean(),
     temp: nullable(v.number()),
     hum: nullable(v.number()),
+    rst: v.optional(nullable(v.number())),
+    heap: v.optional(nullable(v.number())),
   },
   handler: async (ctx, args): Promise<{ full: boolean }> => {
     const doc = await ctx.db.query("homeHub").first();
@@ -42,8 +44,8 @@ export const state = query({
     await requireUser(ctx);
     const doc = await ctx.db.query("homeHub").first();
     if (!doc) return null;
-    const { lastSeen, hub, temp, hum, climateSeen } = doc;
-    return { lastSeen, hub, temp, hum, climateSeen };
+    const { lastSeen, hub, temp, hum, climateSeen, fw, bootAt, rst } = doc;
+    return { lastSeen, hub, temp, hum, climateSeen, fw, bootAt: bootAt ?? null, rst: rst ?? null };
   },
 });
 
@@ -58,6 +60,6 @@ export const climate = query({
 });
 
 function strip(doc: HomeState & { _id: unknown; _creationTime: number }): HomeState {
-  const { lastSeen, hub, boot, seq, rssi, uptime, fw, temp, hum, climateSeen } = doc;
-  return { lastSeen, hub, boot, seq, rssi, uptime, fw, temp, hum, climateSeen };
+  const { lastSeen, hub, boot, seq, rssi, uptime, fw, temp, hum, climateSeen, bootAt, rst, heapMin } = doc;
+  return { lastSeen, hub, boot, seq, rssi, uptime, fw, temp, hum, climateSeen, bootAt: bootAt ?? null, rst: rst ?? null, heapMin: heapMin ?? null };
 }

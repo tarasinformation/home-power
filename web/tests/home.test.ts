@@ -7,6 +7,7 @@ import {
   climateAt,
   climateLine,
   climateView,
+  crashed,
   deg,
   outdoorLine,
   parseHome,
@@ -56,7 +57,11 @@ test("parseHome: бере температуру й вологість із си
       { uptime: 5400, fw: "0.1", rssi: -58 },
     ),
   );
-  assert.deepEqual(r, { kind: "full", boot: 2871340021, seq: 17, uptime: 5400, fw: "0.1", rssi: -58, hub: true, temp: 25.5, hum: 42 });
+  assert.deepEqual(r, { kind: "full", boot: 2871340021, seq: 17, uptime: 5400, fw: "0.1", rssi: -58, hub: true, temp: 25.5, hum: 42, rst: null, heap: null });
+  const diag = parseHome(body([], { rst: 6, heap: 158304 }));
+  assert.ok(typeof diag !== "string");
+  assert.equal(diag.rst, 6);
+  assert.equal(diag.heap, 158304);
 });
 
 test("parseHome: без записів клімату значення порожні, від'ємна температура проходить", () => {
@@ -324,4 +329,21 @@ test("outdoorLine: лівий край береться з запису пере
   );
   assert.ok(line);
   assert.deepEqual(line.runs[0][0], { t: T0, v: 3 });
+});
+
+test("діагностика плати: час запуску рахується від лічильника роботи й не змінюється до наступного запуску", () => {
+  const w = world();
+  w.send(T0, 22, 45, { uptime: 120, rst: 1, heap: 170000 });
+  assert.equal(w.state?.bootAt, T0 - 120_000);
+  assert.equal(w.state?.rst, 1);
+  assert.equal(w.state?.heapMin, 170000);
+  w.send(T0 + 5 * MIN, 22, 45, { uptime: 420, rst: 1, heap: 165000 });
+  assert.equal(w.state?.bootAt, T0 - 120_000, "той самий запуск");
+  assert.equal(w.state?.heapMin, 165000);
+  w.send(T0 + 10 * MIN, 22, 45, { boot: 8, seq: 1, uptime: 30, rst: 6 });
+  assert.equal(w.state?.bootAt, T0 + 10 * MIN - 30_000, "плата перезапустилась");
+  assert.equal(crashed(w.state?.rst), true, "сторожовий таймер — це збій");
+  assert.equal(crashed(1), false);
+  assert.equal(crashed(3), false);
+  assert.equal(crashed(null), false);
 });

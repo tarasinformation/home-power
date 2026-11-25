@@ -48,7 +48,7 @@ if (kind !== "none") {
 const lastSample = climate[climate.length - 1];
 const seen = kind === "silent" ? now - 3 * H : now - MIN;
 const home: HomePublic | null = lastSample
-  ? { lastSeen: seen, hub: kind !== "nohub", temp: tempAt(seen), hum: 45, climateSeen: kind === "nohub" ? now - 50 * MIN : seen }
+  ? { lastSeen: seen, hub: kind !== "nohub", temp: tempAt(seen), hum: 45, climateSeen: kind === "nohub" ? now - 50 * MIN : seen, fw: "0.2.0", bootAt: now - 30 * H, rst: 1 }
   : null;
 const shown = kind === "silent" ? climate.filter(s => s.t <= seen) : kind === "nohub" ? climate.filter(s => s.t <= now - 50 * MIN) : climate;
 

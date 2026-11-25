@@ -36,6 +36,9 @@ export type HomeReport = {
   /** Температура, °C з кроком 0,1, і вологість, цілі відсотки. null — у звіті немає. */
   temp: number | null;
   hum: number | null;
+  /** Діагностика: причина останнього перезапуску плати (код esp_reset_reason) і найменша вільна пам'ять, байтів. */
+  rst?: number | null;
+  heap?: number | null;
 };
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
@@ -81,6 +84,8 @@ export function parseHome(body: unknown): HomeReport | string {
     hub: b.hub,
     temp,
     hum,
+    rst: count(b.rst) !== null && count(b.rst)! <= 32 ? count(b.rst) : null,
+    heap: count(b.heap),
   };
 }
 
@@ -93,6 +98,11 @@ export type HomePublic = {
   temp: number | null;
   hum: number | null;
   climateSeen: number | null;
+  /** Версія прошивки плати. */
+  fw: string | null;
+  /** Коли плата востаннє запустилась (за її лічильником часу роботи) і з якої причини. */
+  bootAt?: number | null;
+  rst?: number | null;
 };
 
 /** Стан плати-читача (один документ у таблиці `homeHub`). */
@@ -101,8 +111,14 @@ export type HomeState = HomePublic & {
   seq: number;
   rssi: number | null;
   uptime: number | null;
-  fw: string | null;
+  /** Найменша вільна пам'ять плати від її запуску, байтів. */
+  heapMin?: number | null;
 };
+
+/** Причини перезапуску, які означають збій, а не ввімкнення чи оновлення: паніка, сторожові таймери, просідання живлення. */
+export function crashed(rst: number | null | undefined): boolean {
+  return rst === 4 || rst === 5 || rst === 6 || rst === 7 || rst === 9;
+}
 
 /** Запис історії клімату. */
 export type ClimateSample = { t: number; temp: number; hum: number | null };
@@ -137,6 +153,10 @@ export function applyHome(
     temp,
     hum,
     climateSeen: heard ? now : (state?.climateSeen ?? null),
+    // Новий запуск плати видно зі зміни `boot`; його час рахуємо назад від лічильника роботи.
+    bootAt: state && state.boot === report.boot && state.bootAt != null ? state.bootAt : now - (report.uptime ?? 0) * 1000,
+    rst: report.rst ?? null,
+    heapMin: report.heap ?? null,
   };
   let sample: ClimateSample | null = null;
   if (heard && temp !== null) {
