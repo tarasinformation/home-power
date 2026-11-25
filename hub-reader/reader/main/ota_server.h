@@ -5,7 +5,7 @@
 
 #define OTA_PORT 8080
 
-/** Запускає невеликий HTTP-сервер: GET /info, GET /pm (облік сну), GET /ota/nonce, POST /ota. */
+/** Запускає невеликий HTTP-сервер: GET /info, GET /pm (облік сну), GET /led (показ кольорів індикації), GET /ota/nonce, POST /ota. */
 void ota_server_start(const char *fw_version);
 
 /** Чи триває зараз запис нової прошивки (на цей час звіти на сайт призупиняються). */

@@ -8,6 +8,7 @@
 //
 // Стабільність: одна задача стежить за підпискою і звітами під сторожовим таймером; якщо довго немає
 // Wi-Fi, хаба або вдалих звітів, плата перезапускається сама. Оновлення по Wi-Fi з відкатом — ota_server.cpp.
+// Індикація стану кольоровим світлодіодом — status_led.h.
 
 #include <atomic>
 #include <cinttypes>
@@ -41,12 +42,13 @@
 #include "hub_subscription.h"
 #include "ota_server.h"
 #include "power_monitor.h"
+#include "status_led.h"
 #include "secrets.h" // HOME_URL, HOME_TOKEN, OTA_KEY; для монітора світла ще REPORT_URL, DEVICE_TOKEN, INDICATOR_IP
 
 static const char *TAG = "hub_reader";
 
 #ifndef FW_VERSION
-#define FW_VERSION "0.4.1"
+#define FW_VERSION "0.5.0"
 #endif
 #define HUB_NODE_ID 2 // номер, під яким плата додала хаб (tools/hub_pair.py)
 
@@ -97,6 +99,11 @@ static const char *TAG = "hub_reader";
 #else
 #define OTA_CONFIRM_WITHIN_MS (10 * 60 * 1000)
 #endif
+
+// Індикація світлодіодом (status_led.h): причину показуємо, лише коли вона триває, а не на кожну заминку.
+#define LED_WIFI_AFTER_MS (15 * 1000)
+#define LED_HUB_AFTER_MS (45 * 1000)
+#define LED_SERVER_AFTER_FAILS 2 // стільки невдалих звітів поспіль
 
 // Спільний стан: пишуть зворотні виклики Matter (задача CHIP), читає задача звітів.
 static std::atomic<bool> s_online{false};     // плата отримувала адресу в Wi-Fi
@@ -304,6 +311,8 @@ static void reporter_task(void *arg)
     bool want_full = true;
     int32_t sent_temp = NONE;
     int32_t sent_hum = NONE;
+    int home_fails = 0; // невдалих звітів поспіль: клімат і світло окремо
+    int pw_fails = 0;
     static char body[448];
     static response_t response;
 #if POWER_REPORT
@@ -335,6 +344,7 @@ static void reporter_task(void *arg)
         if (!s_online || ota_in_progress()) {
             hub_seen = now; // без мережі чи під час оновлення хаб і сайт не винні
             report_ok = now;
+            status_led_set(now - wifi_seen > LED_WIFI_AFTER_MS ? LED_NO_WIFI : 0);
             continue;
         }
         if (!was_online) {
@@ -350,6 +360,25 @@ static void reporter_task(void *arg)
             hub_seen = now;
         } else if (now - hub_seen > RESTART_WITHOUT_HUB_MS) {
             restart("пів години без підписки на хаб");
+        }
+        {
+            uint32_t issues = 0;
+            if (now - wifi_seen > LED_WIFI_AFTER_MS) {
+                issues = LED_NO_WIFI; // без мережі решта причин — лише наслідки, їх не показуємо
+            } else {
+                if (now - hub_seen > LED_HUB_AFTER_MS) {
+                    issues |= LED_NO_HUB;
+                }
+                if (home_fails >= LED_SERVER_AFTER_FAILS || pw_fails >= LED_SERVER_AFTER_FAILS) {
+                    issues |= LED_NO_SERVER;
+                }
+                power_state_t ps;
+                power_monitor_get(&ps);
+                if (ps.enabled && ps.known && !ps.power) {
+                    issues |= LED_NO_POWER;
+                }
+            }
+            status_led_set(issues);
         }
         if (!s_sub_active && (int32_t)(now - next_subscribe) >= 0) {
             s_sub_active = true;
@@ -390,6 +419,7 @@ static void reporter_task(void *arg)
                 const int status = post_json(REPORT_URL, "Bearer " DEVICE_TOKEN, pw_body, &response);
                 esp_task_wdt_reset();
                 printf("hub_reader: світло %s, заряд %d%%: HTTP %d\n", ps.power ? "є" : "немає", ps.soc, status);
+                pw_fails = status == 200 ? 0 : pw_fails + 1;
                 if (status == 200) {
                     pw_sent_once = true;
                     pw_sent_power = ps.power;
@@ -427,9 +457,11 @@ static void reporter_task(void *arg)
         printf("hub_reader: звіт %s №%" PRIu32 ": HTTP %d, хаб %s, темп %" PRId32 ", волог %" PRId32 ", купа %u (мін %u)\n",
                full_due ? "full" : "delta", seq, status, hub ? "так" : "ні", temp == NONE ? -1 : temp,
                hum == NONE ? -1 : hum, (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size());
+        home_fails = status == 200 ? 0 : home_fails + 1;
         if (status == 200) {
             sent_any = true;
             report_ok = now_ms();
+            status_led_booted();
             if (full_due) {
                 last_full = now;
             }
@@ -495,6 +527,7 @@ extern "C" void app_main()
 #endif
 #endif
 
+    status_led_start(); // одразу: «запуск» видно білим миганням ще до появи мережі
     xTaskCreate(reporter_task, "reporter", 10240, nullptr, 3, &s_reporter);
 
     esp_err_t err = esp_matter::start(app_event_cb);

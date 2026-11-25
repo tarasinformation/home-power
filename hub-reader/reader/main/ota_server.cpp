@@ -32,6 +32,7 @@
 
 #include "power_monitor.h"
 #include "secrets.h" // OTA_KEY
+#include "status_led.h"
 
 static const char *TAG = "ota";
 
@@ -42,6 +43,13 @@ static const char *s_fw_version = "";
 static volatile bool s_in_progress = false;
 static char s_nonce[33] = "";
 static int64_t s_nonce_ms = 0;
+
+/** Початок і кінець запису прошивки; світлодіод показує це блакитним. */
+static void set_in_progress(bool value)
+{
+    s_in_progress = value;
+    status_led_refresh();
+}
 
 static int64_t now_ms()
 {
@@ -120,6 +128,14 @@ static esp_err_t pm_get(httpd_req_t *req)
 }
 #endif // CONFIG_PM_PROFILING
 
+// Показ усіх кольорів індикації по секунді. Без ключа: це лише шість спалахів світлодіода.
+static esp_err_t led_get(httpd_req_t *req)
+{
+    status_led_demo();
+    return reply(req, "200 OK", "білий — запуск, жовтий — немає Wi-Fi, синій — немає хаба, червоний — сайт не приймає звіти, "
+                                "фіолетовий — немає світла, блакитний — оновлення\n");
+}
+
 static esp_err_t nonce_get(httpd_req_t *req)
 {
     if (s_in_progress) {
@@ -171,12 +187,12 @@ static esp_err_t ota_post(httpd_req_t *req)
     if (!target || req->content_len < MIN_IMAGE_SIZE || req->content_len > target->size) {
         return reply(req, "413 Payload Too Large", "образ не вміщується в розділ або замалий");
     }
-    s_in_progress = true;
+    set_in_progress(true);
     ESP_LOGW(TAG, "оновлення: %u байтів у розділ %s", (unsigned)req->content_len, target->label);
     esp_ota_handle_t handle = 0;
     esp_err_t err = esp_ota_begin(target, OTA_WITH_SEQUENTIAL_WRITES, &handle);
     if (err != ESP_OK) {
-        s_in_progress = false;
+        set_in_progress(false);
         return reply(req, "500 Internal Server Error", "esp_ota_begin");
     }
     mbedtls_sha256_context sha;
@@ -211,7 +227,7 @@ static esp_err_t ota_post(httpd_req_t *req)
     }
     if (problem) {
         esp_ota_abort(handle);
-        s_in_progress = false;
+        set_in_progress(false);
         ESP_LOGW(TAG, "оновлення скасовано: %s", problem);
         return reply(req, "400 Bad Request", problem);
     }
@@ -220,7 +236,7 @@ static esp_err_t ota_post(httpd_req_t *req)
         err = esp_ota_set_boot_partition(target);
     }
     if (err != ESP_OK) {
-        s_in_progress = false;
+        set_in_progress(false);
         return reply(req, "400 Bad Request", "образ не пройшов перевірку ESP-IDF");
     }
     ESP_LOGW(TAG, "оновлення записано, перезапуск");
@@ -250,6 +266,8 @@ void ota_server_start(const char *fw_version)
     httpd_register_uri_handler(server, &info);
     httpd_register_uri_handler(server, &nonce);
     httpd_register_uri_handler(server, &ota);
+    static const httpd_uri_t led = {.uri = "/led", .method = HTTP_GET, .handler = led_get, .user_ctx = nullptr};
+    httpd_register_uri_handler(server, &led);
 #if CONFIG_PM_PROFILING
     static const httpd_uri_t pm = {.uri = "/pm", .method = HTTP_GET, .handler = pm_get, .user_ctx = nullptr};
     httpd_register_uri_handler(server, &pm);
