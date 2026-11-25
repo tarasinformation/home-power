@@ -15,7 +15,7 @@
 - Перевірено на одній платі ESP32-C6 (4 МБ флеш, без PSRAM) з Aqara Hub M3, ESP-IDF v5.5.5 і esp-matter `release/v1.5`. Espressif сама перевіряє роль контролера лише на ESP32-S3; ESP32-C3 теж запускається, але вільної пам'яті в неї вдвічі менше (близько 94 КБ проти 199 КБ на C6).
 - Перевірено на залізі: сполучення з хабом, підписка, звіти по HTTPS одночасно з підпискою, відновлення підписки після короткого обриву, оновлення по Wi-Fi і відкат на попередню прошивку.
 - Не перевірено: тривала робота (тижні), довгий обрив хаба, зникнення Wi-Fi, спрацювання сторожового таймера, автоматичний легкий сон (зібраний, але вимкнений).
-- **Права на хабі.** Плата, яка сама додає хаб, отримує у своїй «фабриці» права адміністратора, тобто технічно може керувати пристроями хаба, зокрема замками. Бойова прошивка не має ні коду команд, ні консолі, але зниження прав до «лише читання» (запис ACL) тут ще не реалізовано. Ключі лежать у флеш-пам'яті плати відкрито: хто має плату в руках, може їх зчитати.
+- **Права на хабі.** Плата, яка сама додає хаб, отримує у своїй «фабриці» права адміністратора, тобто технічно може керувати пристроями хаба, зокрема замками. Тому одразу після сполучення їх треба знизити до «лише перегляд» (крок 5 нижче): це один запис зі службової консолі. На Aqara Hub M3 перевірено, що після цього хаб відхиляє і запис прав, і команди пристроям, а читання й підписка працюють. Бойова прошивка, крім того, не має ні коду команд, ні консолі. Ключі лежать у флеш-пам'яті плати відкрито: хто має плату в руках, може їх зчитати.
 
 ## Що тут лежить
 
@@ -50,8 +50,13 @@ source ~/Developer/esp/esp-idf/export.sh && source ~/Developer/esp/esp-matter/ex
 2. **Wi-Fi:** `python tools/wifi_connect.py НАЗВА_МЕРЕЖІ` (Python з оточення ESP-IDF, у ньому є pyserial). Пароль питається без показу; плата зберігає мережу у своїй пам'яті.
 3. **Кореневий сертифікат виробника хаба.** Службова прошивка довіряє лише сертифікатам із `firmware/paa_cert_hub/`. Там лежить `Aqara Matter PAA #01` (SHA-256 `8ab1dc34a8dfd91824b5fb7b7213a419da689c5004cfb8746f4f724ae0bb5845`, звірено з реєстром DCL у листопаді 2026). Для іншого хаба покладіть туди сертифікат його виробника у форматі `.der` (не більше п'яти файлів). Якщо сертифікат не той, плата відмовить у сполученні й надрукує ідентифікатор потрібного.
 4. **Сполучення з хабом:** `python tools/hub_pair.py`. Дочекайтеся «Плата готова», згенеруйте в застосунку хаба код сполучення Matter і введіть його. Хаб стає вузлом 2.
-5. **Ключі:** `HOME_URL=https://<назва>.convex.site/home bash reader/tools/setup_token.sh`. Створює у зв'язці ключів macOS ключ звітів і ключ оновлень, записує `HOME_TOKEN` у бойовий Convex і кладе `secrets.h` у `~/.config/esp-hub-reader/secrets/`. Значення ніде не друкуються.
-6. **Бойова прошивка** (перший раз кабелем, бо змінюється таблиця розділів):
+5. **Права «лише перегляд».** Поки на платі службова прошивка, надішліть у її консоль (наприклад, через `tools/console_daemon.py`: він пише журнал у файл і шле платі рядки з файла команд):
+   ```
+   matter esp controller write-attr 2 0 31 0 "{\"0:ARR-OBJ\":[{\"1:U8\": 1, \"2:U8\": 2, \"3:ARR-U64\": [112233], \"4:NULL\": null}]}"
+   ```
+   Це замінює запис «адміністратор» (рівень 5) для вузла плати (112233) записом «перегляд» (рівень 1). Перевірка: `matter esp controller read-attr 2 0 31 0` тепер має завершитися відмовою `IM:0x0000057E`, а читання температури (`read-attr 2 <ендпоінт> 0x0402 0`) — працювати. Повернути права після цього можна лише заново: прибрати плату в застосунку хаба й сполучити ще раз.
+6. **Ключі:** `HOME_URL=https://<назва>.convex.site/home bash reader/tools/setup_token.sh`. Створює у зв'язці ключів macOS ключ звітів і ключ оновлень, записує `HOME_TOKEN` у бойовий Convex і кладе `secrets.h` у `~/.config/esp-hub-reader/secrets/`. Значення ніде не друкуються.
+7. **Бойова прошивка** (перший раз кабелем, бо змінюється таблиця розділів):
    ```bash
    cd reader
    idf.py -B ~/.config/esp-hub-reader/build-reader -D SDKCONFIG=~/.config/esp-hub-reader/sdkconfig.reader \
@@ -60,7 +65,7 @@ source ~/Developer/esp/esp-idf/export.sh && source ~/Developer/esp/esp-matter/ex
    idf.py -B ~/.config/esp-hub-reader/build-reader -D SDKCONFIG=~/.config/esp-hub-reader/sdkconfig.reader -p /dev/cu.usbmodemXXXX flash
    ```
    Без `erase-flash`: він стер би Wi-Fi і сполучення з хабом.
-7. **Далі оновлення по Wi-Fi:** `python3 reader/tools/ota_upload.py АДРЕСА_ПЛАТИ`. Закріпіть за платою адресу на роутері (статична DHCP-ліза).
+8. **Далі оновлення по Wi-Fi:** `python3 reader/tools/ota_upload.py АДРЕСА_ПЛАТИ`. Закріпіть за платою адресу на роутері (статична DHCP-ліза).
 
 ## Як працює бойова прошивка
 
@@ -77,4 +82,4 @@ source ~/Developer/esp/esp-idf/export.sh && source ~/Developer/esp/esp-matter/ex
 
 ## English summary
 
-An optional second board for this project: an ESP32-C6 acts as a Matter controller, subscribes to temperature and humidity of a sensor behind a Matter bridge (tested with Aqara Hub M3) and posts readings to the site's `POST /home` endpoint. `firmware/` is the stock esp-matter controller example used once for Wi-Fi setup and pairing; `reader/` is the production firmware with a subscription watchdog, signed over-the-air updates with rollback, and no console or command code. Built with ESP-IDF v5.5.5 and esp-matter `release/v1.5`. Caveat: the board holds administrator rights on the hub's fabric until its ACL is reduced, which is not implemented here.
+An optional second board for this project: an ESP32-C6 acts as a Matter controller, subscribes to temperature and humidity of a sensor behind a Matter bridge (tested with Aqara Hub M3) and posts readings to the site's `POST /home` endpoint. `firmware/` is the stock esp-matter controller example used once for Wi-Fi setup and pairing; `reader/` is the production firmware with a subscription watchdog, signed over-the-air updates with rollback, and no console or command code. Built with ESP-IDF v5.5.5 and esp-matter `release/v1.5`. Caveat: right after pairing the board holds administrator rights on the hub's fabric; step 5 reduces its ACL entry to View with one console command (verified on Aqara Hub M3: ACL writes and device commands are then rejected, reads and subscriptions keep working).
