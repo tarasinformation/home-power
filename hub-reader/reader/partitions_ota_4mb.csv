@@ -1,0 +1,12 @@
+# Таблиця розділів плати-читача для флеш-пам'яті 4 МБ з оновленням по Wi-Fi: два розділи програми по 1,81 МБ.
+# Розділи nvs, nvs_keys і phy_init стоять на тих самих місцях, що й у ../firmware/partitions_c3_4mb.csv:
+# сполучення з хабом і Wi-Fi переживають зміну таблиці. Розділу paa_cert тут немає (він потрібен лише для
+# сполучення, тобто службовій прошивці; вона записується кабелем разом зі своєю таблицею).
+# Name,   Type, SubType, Offset,  Size, Flags
+esp_secure_cert,  0x3F, ,0xd000,    0x2000, encrypted
+nvs,      data, nvs,     0x10000,   0x40000,
+nvs_keys, data, nvs_keys,0x50000,   0x1000, encrypted
+phy_init, data, phy,     0x51000,   0x1000,
+otadata,  data, ota,     0x52000,   0x2000,
+ota_0,    app,  ota_0,   0x60000,   0x1D0000,
+ota_1,    app,  ota_1,   0x230000,  0x1D0000,

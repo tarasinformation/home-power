@@ -1,0 +1,13 @@
+# Контролер Matter на ESP32-C6 (4 МБ вбудованої флеш, без PSRAM) для порівняння з C3.
+# У esp-matter release/v1.5 приклад контролера перевірений лише на esp32s3.
+CONFIG_IDF_TARGET="esp32c6"
+
+# Флеш 4 МБ і та сама таблиця розділів, що й для C3 (один розділ програми 3,5 МБ)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=n
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_c3_4mb.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_c3_4mb.csv"
+
+# Сервер Matter вимкнено: плата лише контролер
+CONFIG_ESP_MATTER_ENABLE_MATTER_SERVER=n

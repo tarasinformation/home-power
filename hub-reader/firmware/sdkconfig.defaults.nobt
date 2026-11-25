@@ -1,0 +1,7 @@
+# Без Bluetooth: хаб додається по мережі (код сполучення), BLE для цього не потрібен.
+# Економить флеш і оперативну пам'ять. Підключати після sdkconfig.defaults і файла цілі.
+CONFIG_BT_ENABLED=n
+CONFIG_BT_NIMBLE_ENABLED=n
+CONFIG_ENABLE_CHIPOBLE=n
+CONFIG_ENABLE_ESP32_BLE_CONTROLLER=n
+CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n

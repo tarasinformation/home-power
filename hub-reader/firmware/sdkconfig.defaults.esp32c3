@@ -1,0 +1,13 @@
+# Спроба контролера Matter на ESP32-C3 (4 МБ флеш, без PSRAM). Доповнює sdkconfig.defaults.
+# У esp-matter release/v1.5 приклад контролера перевірений лише на esp32s3.
+CONFIG_IDF_TARGET="esp32c3"
+
+# Флеш 4 МБ і власна таблиця розділів з одним розділом програми
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=n
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_c3_4mb.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_c3_4mb.csv"
+
+# Сервер Matter вимкнено: плата лише контролер
+CONFIG_ESP_MATTER_ENABLE_MATTER_SERVER=n

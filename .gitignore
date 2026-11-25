@@ -19,3 +19,10 @@ web/.agents/
 web/.claude/
 web/skills-lock.json
 web/convex/_generated/ai/
+
+# Плата-читач хаба: завантажені компоненти, локальні збірки й кеш Python
+hub-reader/**/managed_components/
+hub-reader/**/build/
+hub-reader/**/sdkconfig
+hub-reader/**/sdkconfig.old
+__pycache__/

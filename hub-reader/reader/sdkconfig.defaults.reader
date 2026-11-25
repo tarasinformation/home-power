@@ -1,0 +1,36 @@
+# Бойова прошивка плати-читача. Підключати останнім, після налаштувань із ../firmware:
+#   sdkconfig.defaults; sdkconfig.defaults.esp32c6; sdkconfig.defaults.nobt
+# Після будь-якої зміни тут збирати в новій папці збірки (бібліотека CHIP сама не перезбирається).
+
+# Таблиця з двома розділами програми для оновлення по Wi-Fi; nvs на тому самому місці, що й у службовій прошивці
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_ota_4mb.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_ota_4mb.csv"
+# Відкат на попередню прошивку, якщо нова не підтвердила себе (ota_server.cpp)
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Без консолі CHIP: плата не приймає команд ні з USB, ні з мережі. Журнал через USB лишається.
+CONFIG_ENABLE_CHIP_SHELL=n
+
+# Сторожовий таймер задач: зависла задача звітів перезапускає плату (звіт по HTTPS може тривати до пів хвилини)
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=90
+CONFIG_ESP_TASK_WDT_PANIC=y
+
+# HTTPS до сайту: перевірка сертифіката сервера за скороченим набором поширених кореневих сертифікатів
+# (сайт підписаний Google Trust Services, запасний ланцюжок — GlobalSign; обидва в наборі)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
+
+# Менший образ: він має вміщатися в розділ 1,81 МБ
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+CONFIG_CHIP_LOG_DEFAULT_LEVEL_ERROR=y
+CONFIG_ESP_ERR_TO_NAME_LOOKUP=n
+
+# Енергія: 80 МГц замість 160; керування живленням зібране, легкий сон вмикається в коді (LIGHT_SLEEP).
+# Поки плата під'єднана до комп'ютера по USB, легкий сон не вмикається: журнал і запис кабелем працюють.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION=y
