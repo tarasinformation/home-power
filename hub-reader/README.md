@@ -92,6 +92,10 @@ source ~/Developer/esp/esp-idf/export.sh && source ~/Developer/esp/esp-matter/ex
 - Ціна: образ 1,68 МБ із 1,81 (запас 12 %), вільної пам'яті близько 125 КБ замість 199 КБ (найнижча позначка близько 83 КБ), частка сну в перші хвилини 50–60 % замість 75–80 %.
 - Перевірено на платі: стан світла й заряд збігаються зі старою платою; з неіснуючою адресою індикатора (змінна `HUB_READER_TEST_INDICATOR` під час збірки) плата оголошує «світла немає» після двох невдалих циклів. Справжнього відключення світла з цією прошивкою ще не було.
 
+## Корпус
+
+Для ESP32-C6 Super Mini (по 10 контактів з кожного боку, близько 25,6 × 18 мм без роз'єму) є готова модель на защіпці: [ESP32-C6 Super Mini Case | USB-C | Options](https://makerworld.com/en/models/1647917) (i-BoxIt, MakerWorld), з варіантами під товщину плати 1,15 і 1,65 мм. Модель — робота й ліцензія її автора, у репозиторій не входить. Корпус із кореня цього README (для ESP32-C3 Super Mini) закороткий: найдовший готовий файл там на 26 мм.
+
 ## Походження коду
 
 `firmware/` і службові файли `reader/main/linker.lf`, `matter_project_config.h` походять із прикладу `examples/controller` репозиторію [esp-matter](https://github.com/espressif/esp-matter) (Apache-2.0). Тестові сертифікати в `firmware/paa_cert/` звідти ж; сертифікат Aqara — з [connectedhomeip](https://github.com/project-chip/connectedhomeip/tree/master/credentials/production/paa-root-certs).
