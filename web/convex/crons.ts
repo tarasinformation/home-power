@@ -12,6 +12,9 @@ crons.interval("check-stale", { minutes: 5 }, internal.power.checkStale);
 // Кожні 20 хвилин: забрати офіційний графік відключень. Запис у базу лише коли він змінився.
 crons.interval("sync-schedule", { minutes: 20 }, internal.schedule.sync);
 
+// Кожні 15 хвилин: погода надворі (Open-Meteo оновлює поточні значення з тим самим кроком).
+crons.interval("sync-weather", { minutes: 15 }, internal.weather.sync);
+
 // Раз на добу: прибрати стару історію, щоб база й читання не росли без меж.
 crons.daily("prune-history", { hourUTC: 2, minuteUTC: 30 }, internal.power.prune);
 

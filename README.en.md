@@ -33,6 +33,8 @@ backup power                               regular socket
 - Power station: percentage, trend and an estimate of time left or time to full.
 - Day by hour, styled after the Kyiv Digital outage schedule: past hours show what happened, future hours show the schedule; tap an hour for details.
 - Station charge over the last day, a week overview, a list of outages.
+- Optional: home temperature and humidity with a chart of the last day that shows how the home cools down during an outage. The card appears once a separate board starts sending readings to `POST /home` (key in the `HOME_TOKEN` variable, format described in `web/convex/http.ts`); firmware for such a board is not in this repository yet.
+- Outdoor weather on the same chart plus current conditions (temperature, feels-like, wind, humidity, precipitation): the open [Open-Meteo](https://open-meteo.com/) API, no key, polled every 15 minutes. The place comes from `WEATHER_LAT`, `WEATHER_LON` and `WEATHER_PLACE` (Kyiv city centre by default); `WEATHER_LAT=off` turns it off.
 - Light and dark themes, mobile-first, animations that respect "reduce motion".
 
 The interface is in Ukrainian.
@@ -44,7 +46,9 @@ The interface is in Ukrainian.
 | `firmware/` | ESP32-C3 firmware (PlatformIO, Arduino), `make_secrets.py`, which writes `include/secrets.h`, and `ota_upload.py` for updates over Wi-Fi |
 | `web/convex/` | Convex backend: report endpoint (`http.ts`), state and log (`power.ts`), Yasno schedule (`schedule.ts`), crons (`crons.ts`), sign-in (`auth.ts`) |
 | `web/convex/lib/logic.ts` | All state logic with no Convex dependency, shared by the server and the page |
+| `web/convex/home.ts`, `web/convex/weather.ts`, `web/convex/lib/home.ts` | Home climate and outdoor weather: readings intake, Open-Meteo polling and the chart logic |
 | `web/src/` | Website: Vite + React + TypeScript |
+| `web/dev/` | The page on made-up data, no sign-in or backend: `npm run dev`, then `/dev/preview.html`. Not part of the built site |
 | `web/tests/` | Logic tests: `npm test` |
 | `web/scripts/` | Deploy, sign-in keys, Yasno outage-group lookup by address |
 

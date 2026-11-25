@@ -53,7 +53,8 @@ export const prune = internalMutation({
       .withIndex("by_start", q => q.lt("start", now - KEEP_SOC_MS))
       .take(100);
     for (const row of oldPlan) await ctx.db.delete(row._id);
-    for (const [table, keep] of [["socSamples", KEEP_SOC_MS], ["events", KEEP_EVENTS_MS]] as const) {
+    // Клімат вдома й температура надворі зберігаються стільки ж, скільки заряд станції.
+    for (const [table, keep] of [["socSamples", KEEP_SOC_MS], ["homeClimate", KEEP_SOC_MS], ["weatherSamples", KEEP_SOC_MS], ["events", KEEP_EVENTS_MS]] as const) {
       const old = await ctx.db
         .query(table)
         .withIndex("by_t", q => q.lt("t", now - keep))
@@ -76,7 +77,7 @@ export const checkStale = internalMutation({
   },
 });
 
-async function requireUser(ctx: QueryCtx) {
+export async function requireUser(ctx: QueryCtx) {
   const userId = await getAuthUserId(ctx);
   if (userId === null) throw new Error("Потрібен вхід");
 }

@@ -20,6 +20,7 @@
   --bolt: #e2a300;
 
   --accent: #1f6fe0;
+  --out: #eb6834; /* друга лінія на графіку температури: надворі */
   --green: #2ea64f;
   --red: #e0443b;
   --amber: #d99a00;
@@ -52,6 +53,7 @@
     --bolt: #f6c344;
 
     --accent: #3a8ef2;
+    --out: #d95926;
     --green: #47c063;
     --red: #ff5d54;
     --amber: #f2b234;
@@ -274,6 +276,11 @@ p {
 .pill-none {
   background: var(--card-2);
   color: var(--muted);
+}
+.pill-info {
+  background: var(--card-2);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
 }
 .hero-warn {
   margin-top: 12px;
@@ -704,6 +711,123 @@ p {
   font-size: 13px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- температура вдома ---------- */
+.climate-hum {
+  text-align: right;
+}
+.climate-hum-value {
+  margin-top: 2px;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.climate-hum-value span {
+  margin-left: 2px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.climate-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.climate-empty {
+  margin-top: 12px;
+}
+.climate-lone {
+  fill: var(--accent);
+}
+.climate.stale .station-value .num {
+  color: var(--muted);
+}
+.climate-out {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.climate-out-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.climate-out-main b {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.climate-out-main span {
+  font-size: 15px;
+}
+.climate-out-details {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.climate-out.stale .climate-out-main {
+  color: var(--muted);
+}
+.out-line {
+  stroke: var(--out);
+  stroke-width: 2;
+}
+.out-dot,
+.out-lone {
+  fill: var(--out);
+}
+.soc-tip circle.out-tip {
+  stroke: var(--out);
+}
+.climate-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.climate-legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.climate-legend b {
+  font-weight: 600;
+  color: var(--fg);
+}
+.sw {
+  flex: none;
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+.sw-home {
+  background: var(--accent);
+}
+.sw-out {
+  background: var(--out);
+}
+.climate-credit {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.climate-credit a {
+  color: inherit;
 }
 
 /* ---------- тиждень ---------- */

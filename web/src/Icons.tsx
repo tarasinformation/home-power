@@ -87,3 +87,65 @@ export const Alert = (p: P) => (
     <path d="M10.36 3.6L2.4 17.3A1.9 1.9 0 0 0 4.04 20h15.92a1.9 1.9 0 0 0 1.64-2.7L13.64 3.6a1.9 1.9 0 0 0-3.28 0z" />
   </Svg>
 );
+
+export const Thermometer = (p: P) => (
+  <Svg {...p}>
+    <path d="M10 13.5a4 4 0 1 0 4 0V5a2 2 0 0 0-4 0z" />
+    <path d="M10 9h4" />
+  </Svg>
+);
+
+export const Sun = (p: P) => (
+  <Svg {...p}>
+    <path d="M8 12a4 4 0 1 0 8 0 4 4 0 1 0-8 0" />
+    <path d="M3 12h1m8-9v1m8 8h1m-9 8v1M5.6 5.6l.7.7m12.1-.7l-.7.7m0 11.4l.7.7m-12.1-.7l-.7.7" />
+  </Svg>
+);
+
+const CLOUD = "M7 18a4.6 4.4 0 0 1 0-9 5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7z";
+const CLOUD_OPEN = "M7 16a4.6 4.4 0 0 1 0-9 5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7";
+
+export const Cloud = (p: P) => (
+  <Svg {...p}>
+    <path d={CLOUD} />
+  </Svg>
+);
+
+export const CloudRain = (p: P) => (
+  <Svg {...p}>
+    <path d={CLOUD_OPEN} />
+    <path d="M9 17v2m0 2v.01M13 15v2m0 2v2m4-4v2" />
+  </Svg>
+);
+
+export const CloudSnow = (p: P) => (
+  <Svg {...p}>
+    <path d={CLOUD_OPEN} />
+    <path d="M9 17v.01M9 20.5v.01M13 15.5v.01M13 19v.01M17 17v.01M17 20.5v.01" />
+  </Svg>
+);
+
+export const CloudStorm = (p: P) => (
+  <Svg {...p}>
+    <path d={CLOUD_OPEN} />
+    <path d="M13 14l-2 4h3l-2 4" />
+  </Svg>
+);
+
+export const Mist = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 5h3m4 0h7M3 10h11m4 0h3M5 15h5m4 0h5M3 20h9m4 0h3" />
+  </Svg>
+);
+
+/** Іконка погоди за кодом WMO: ясно, хмарно, туман, дощ, сніг або гроза. */
+export function WeatherIcon({ code, ...p }: P & { code: number | null }) {
+  if (code === null) return <Cloud {...p} />;
+  if (code <= 1) return <Sun {...p} />;
+  if (code <= 3) return <Cloud {...p} />;
+  if (code === 45 || code === 48) return <Mist {...p} />;
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return <CloudSnow {...p} />;
+  if (code >= 95) return <CloudStorm {...p} />;
+  if (code >= 51) return <CloudRain {...p} />;
+  return <Cloud {...p} />;
+}

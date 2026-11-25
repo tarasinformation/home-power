@@ -4,8 +4,9 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../convex/_generated/api";
 import { Chart } from "./Chart";
 import { Battery, SocChart } from "./Station";
+import { Climate, type Outdoor } from "./Climate";
 import { DayGrid } from "./DayGrid";
-import { Alert, Bolt, BoltOff, Calendar, Help, Logout, WifiOff } from "./Icons";
+import { Alert, Bolt, BoltOff, Calendar, Help, Logout, Thermometer, WeatherIcon, WifiOff } from "./Icons";
 import {
   days,
   clock,
@@ -24,6 +25,7 @@ import {
   type SocSample,
   type View,
 } from "../convex/lib/logic";
+import { climateView, deg, weatherFresh, weatherText, type ClimateSample, type HomePublic } from "../convex/lib/home";
 
 /** Поточний час, що оновлюється кожні 15 с: тривалість росте, а «немає зв'язку» з'являється само. */
 function useNow(): number {
@@ -49,6 +51,10 @@ export function StatusPage() {
   const plan = useQuery(api.schedule.plan);
   const group = useQuery(api.schedule.group);
   const who = useQuery(api.power.me);
+  const home = useQuery(api.home.state);
+  const climate = useQuery(api.home.climate);
+  const weather = useQuery(api.weather.now);
+  const outdoorSamples = useQuery(api.weather.samples);
   const now = useNow();
 
   if (state === undefined || events === undefined) {
@@ -75,6 +81,9 @@ export function StatusPage() {
       plan={plan ?? []}
       group={group ?? null}
       who={who ?? null}
+      home={home ?? null}
+      climate={climate ?? []}
+      outdoor={{ weather: weather?.weather ?? null, samples: outdoorSamples ?? [], place: weather?.place ?? null }}
       onSignOut={() => void signOut()}
     />
   );
@@ -89,6 +98,9 @@ export function StatusView({
   plan,
   group,
   who,
+  home,
+  climate,
+  outdoor,
   onSignOut,
 }: {
   v: View;
@@ -98,9 +110,18 @@ export function StatusView({
   plan: PlanDay[];
   group: string | null;
   who: string | null;
+  /** Плата-читач хаба й історія клімату. Поки плати немає — null і порожній список, картка не малюється. */
+  home: HomePublic | null;
+  climate: ClimateSample[];
+  /** Погода надворі; без неї картка показує лише температуру вдома. */
+  outdoor: Outdoor;
   onSignOut: () => void;
 }) {
   const pill = planPill(plan, v);
+  // Температура у верхній картці: лише свіжі значення, застарілі видно в картці «Температура вдома».
+  const indoor = climateView(home, v.now);
+  const indoorTemp = indoor && indoor.issue === null ? indoor.temp : null;
+  const outdoorNow = weatherFresh(outdoor.weather, v.now) ? outdoor.weather : null;
   const [day, setDay] = useState<number | null>(null);
   const grid = useRef<HTMLDivElement>(null);
   const withPlan = withTomorrow(rows, plan, v.now);
@@ -138,12 +159,26 @@ export function StatusView({
           </div>
         </div>
         <p className="hero-note">{note(v)}</p>
-        {pill && (
+        {(pill || indoorTemp !== null || outdoorNow) && (
           <div className="hero-pills">
-            <span className={`pill pill-${pill.kind}`}>
-              <Calendar size={16} />
-              {pill.text}
-            </span>
+            {pill && (
+              <span className={`pill pill-${pill.kind}`}>
+                <Calendar size={16} />
+                {pill.text}
+              </span>
+            )}
+            {indoorTemp !== null && (
+              <span className="pill pill-info" aria-label={`Вдома ${deg(indoorTemp)} градуса`}>
+                <Thermometer size={16} />
+                вдома {deg(indoorTemp)}°
+              </span>
+            )}
+            {outdoorNow && (
+              <span className="pill pill-info" aria-label={`Надворі ${deg(outdoorNow.temp)} градуса${weatherText(outdoorNow.code) ? `, ${weatherText(outdoorNow.code)}` : ""}`}>
+                <WeatherIcon code={outdoorNow.code} size={16} />
+                надворі {deg(outdoorNow.temp)}°
+              </span>
+            )}
           </div>
         )}
         {pill?.warn && (
@@ -164,8 +199,10 @@ export function StatusView({
 
       <SocChart samples={samples} outages={outages} v={v} />
 
+      <Climate home={home} samples={climate} outages={outages} now={v.now} outdoor={outdoor} />
+
       {v.status !== "unknown" && (
-        <section className="card" style={{ "--d": 4 } as CSSProperties}>
+        <section className="card" style={{ "--d": 5 } as CSSProperties}>
           <div className="card-head">
             <h2>Тиждень</h2>
             <span className="card-sub">{HISTORY_DAYS} днів</span>
@@ -182,7 +219,7 @@ export function StatusView({
         </section>
       )}
 
-      <section className="card" style={{ "--d": 5 } as CSSProperties}>
+      <section className="card" style={{ "--d": 6 } as CSSProperties}>
         <div className="card-head">
           <h2>Відключення</h2>
           <span className="card-sub">{v.outages.length ? `разом ${dur(v.total)}` : `${HISTORY_DAYS} днів`}</span>
