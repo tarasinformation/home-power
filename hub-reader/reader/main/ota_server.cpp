@@ -21,6 +21,7 @@
 #include <esp_http_server.h>
 #include <esp_log.h>
 #include <esp_ota_ops.h>
+#include <esp_pm.h>
 #include <esp_random.h>
 #include <esp_system.h>
 #include <esp_timer.h>
@@ -85,6 +86,26 @@ static esp_err_t info_get(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }
+
+#if CONFIG_PM_PROFILING
+// Облік керування живленням від запуску: скільки часу процесор провів у сні й на кожній частоті
+// та хто саме не давав йому заснути. Лише читання, без ключа: тут немає нічого, крім лічильників.
+static esp_err_t pm_get(httpd_req_t *req)
+{
+    char *text = nullptr;
+    size_t len = 0;
+    FILE *stream = open_memstream(&text, &len);
+    if (!stream) {
+        return reply(req, "500 Internal Server Error", "memstream");
+    }
+    esp_pm_dump_locks(stream);
+    fclose(stream);
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    esp_err_t err = httpd_resp_send(req, text, len);
+    free(text);
+    return err;
+}
+#endif // CONFIG_PM_PROFILING
 
 static esp_err_t nonce_get(httpd_req_t *req)
 {
@@ -201,7 +222,7 @@ void ota_server_start(const char *fw_version)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = OTA_PORT;
     config.stack_size = 6144;
-    config.max_uri_handlers = 4;
+    config.max_uri_handlers = 6;
     config.max_open_sockets = 2;
     config.recv_wait_timeout = 15;
     config.lru_purge_enable = true;
@@ -216,6 +237,10 @@ void ota_server_start(const char *fw_version)
     httpd_register_uri_handler(server, &info);
     httpd_register_uri_handler(server, &nonce);
     httpd_register_uri_handler(server, &ota);
+#if CONFIG_PM_PROFILING
+    static const httpd_uri_t pm = {.uri = "/pm", .method = HTTP_GET, .handler = pm_get, .user_ctx = nullptr};
+    httpd_register_uri_handler(server, &pm);
+#endif
 }
 
 bool ota_in_progress(void)

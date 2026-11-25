@@ -34,3 +34,5 @@ CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
 CONFIG_PM_ENABLE=y
 CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
 CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION=y
+# Облік сну: плата рахує, скільки часу провела в сні й на кожній частоті (GET /pm)
+CONFIG_PM_PROFILING=y

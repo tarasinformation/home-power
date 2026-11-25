@@ -45,13 +45,16 @@
 static const char *TAG = "hub_reader";
 
 #ifndef FW_VERSION
-#define FW_VERSION "0.2.2"
+#define FW_VERSION "0.3.1"
 #endif
 #define HUB_NODE_ID 2 // номер, під яким плата додала хаб (tools/hub_pair.py)
 
-// Автоматичний легкий сон процесора між подіями. Вмикається окремою версією після того,
-// як ця попрацює без нього: так видно, чи саме сон щось ламає.
-#define LIGHT_SLEEP 0
+// Автоматичний легкий сон процесора між подіями (з версії 0.3.0). Радіо при цьому прокидається
+// на маяки роутера, тож вхідні повідомлення хаба й запити оновлення доходять, лише з невеликою затримкою.
+// Поки плата під'єднана по USB до комп'ютера, сон не вмикається (CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION).
+// Скільки часу плата справді спить, показує GET /pm.
+#define LIGHT_SLEEP 1
+#define AWAKE_AFTER_BOOT_MS (20 * 1000)
 
 // Кластери Matter: вимірювання температури й відносної вологості; атрибут 0 — MeasuredValue (у сотих).
 #define CLUSTER_TEMPERATURE 0x0402
@@ -407,12 +410,30 @@ extern "C" void app_main()
            ota_pending_verify() ? ", нова прошивка чекає підтвердження" : "");
 
 #if CONFIG_PM_ENABLE
-    // Частота процесора 80 МГц; легкий сон вмикається прапорцем LIGHT_SLEEP.
+    // Частота процесора 80 МГц; автоматичний легкий сон — прапорець LIGHT_SLEEP.
     esp_pm_config_t pm = {};
     pm.max_freq_mhz = 80;
     pm.min_freq_mhz = 80;
     pm.light_sleep_enable = LIGHT_SLEEP;
     esp_pm_configure(&pm);
+#if LIGHT_SLEEP
+    // Перші секунди після запуску не спимо. У сні вбудований USB вимкнений, і комп'ютер не встигає
+    // розпізнати плату; тоді запобіжник CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION вважає, що кабеля немає,
+    // і журнал та запис кабелем пропадають (так було у 0.3.0). За цей час комп'ютер, якщо він є,
+    // розпізнає плату, і далі сон заборонений, доки кабель під'єднано. На зарядці сон починається після паузи.
+    static esp_pm_lock_handle_t awake_after_boot;
+    if (esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "after_boot", &awake_after_boot) == ESP_OK) {
+        esp_pm_lock_acquire(awake_after_boot);
+        esp_timer_create_args_t timer_args = {};
+        timer_args.callback = [](void *lock) { esp_pm_lock_release((esp_pm_lock_handle_t)lock); };
+        timer_args.arg = awake_after_boot;
+        timer_args.name = "after_boot";
+        esp_timer_handle_t timer;
+        if (esp_timer_create(&timer_args, &timer) == ESP_OK) {
+            esp_timer_start_once(timer, AWAKE_AFTER_BOOT_MS * 1000ULL);
+        }
+    }
+#endif
 #endif
 
     xTaskCreate(reporter_task, "reporter", 10240, nullptr, 3, &s_reporter);

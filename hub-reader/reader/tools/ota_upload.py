@@ -9,6 +9,7 @@
 (перший вдалий звіт на сайт), і каже, чи вона лишилась, чи плата відкотилась на попередню.
 Потрібна лише стандартна бібліотека Python 3.
 """
+import glob
 import hashlib
 import hmac
 import json
@@ -21,7 +22,7 @@ import urllib.request
 
 PORT = 8080
 KEYCHAIN_SERVICE = "hub-reader-ota-key"
-DEFAULT_IMAGE = os.path.expanduser("~/.config/esp-hub-reader/build-reader/hub_reader.bin")
+BUILDS_GLOB = os.path.expanduser("~/.config/esp-hub-reader/build-reader*/hub_reader.bin")
 CONFIRM_WAIT_S = 240
 
 
@@ -42,7 +43,15 @@ def main() -> int:
         print(__doc__)
         return 2
     base = f"http://{sys.argv[1]}:{PORT}"
-    path = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_IMAGE
+    if len(sys.argv) > 2:
+        path = sys.argv[2]
+    else:
+        # Без другого аргументу береться найсвіжіший зібраний образ (папки build-reader*).
+        builds = sorted(glob.glob(BUILDS_GLOB), key=os.path.getmtime)
+        if not builds:
+            print(f"Не знайшов зібраного образу ({BUILDS_GLOB}). Вкажіть файл другим аргументом.")
+            return 2
+        path = builds[-1]
     with open(path, "rb") as f:
         image = f.read()
     key = subprocess.run(["/usr/bin/security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
