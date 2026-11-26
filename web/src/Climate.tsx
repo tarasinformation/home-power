@@ -6,8 +6,10 @@ import {
   climateLine,
   climateView,
   deg,
+  axisY,
   outdoorLine,
-  tempScale,
+  smoothRuns,
+  tempAxis,
   valueAt,
   weatherFresh,
   weatherText,
@@ -22,9 +24,10 @@ import {
 
 const H = 3600_000;
 const PAD = { l: 36, r: 14, t: 14, b: 28 };
-/** Правий відступ, коли праворуч стоїть друга шкала (надворі). */
-const PAD_R_AXIS = 38;
 const PH = 120;
+/** Шкала з розривом: висота кожної з двох смуг і самого розриву. */
+const BAND_H = 92;
+const GAP_H = 24;
 
 /** Погода надворі для картки: поточні значення, історія температури й назва місця. */
 export type Outdoor = { weather: WeatherNow | null; samples: OutdoorSample[]; place: string | null };
@@ -48,9 +51,9 @@ function range(min: number, max: number): string {
 
 /**
  * Температура вдома: поточні покази, вологість і лінія за останню добу з відключеннями позаду.
- * Якщо бекенд збирає погоду, на тому самому графіку — температура надворі з власною шкалою праворуч
- * (вдома й надворі різняться на десятки градусів, на спільній шкалі обидві лінії були б майже прямі)
- * та поточна погода.
+ * Якщо бекенд збирає погоду, на тому самому графіку — температура надворі та поточна погода.
+ * Шкала одна, тому холодніша лінія завжди нижче; коли вдома й надворі різняться сильно, порожню
+ * середину шкали вирізано (розрив), щоб коливання обох ліній було видно.
  * Нічого не малює, поки плата-читач хаба не передала жодного показу.
  */
 export function Climate({
@@ -174,16 +177,17 @@ function Plot({
   const { from } = line;
   const span = line.to - from;
   const out = outdoorLine(outdoor.samples, outdoor.weather, from, line.to);
-  // Дві шкали градусів на одному графіку: ліворуч — вдома, праворуч — надворі. Кожна підібрана під свою
-  // лінію, тому висота ліній і місця, де вони перетинаються, нічого не означають: порівнювати можна
-  // лише форму й час змін. Обидві шкали мають по три позначки на тих самих висотах, тож сітка одна.
-  const scale = tempScale(line.min, line.max, out !== null);
-  const outScale = out ? tempScale(out.min, out.max, true) : null;
-  const padR = out ? PAD_R_AXIS : PAD.r;
-  const iw = Math.max(1, w - PAD.l - padR);
+  // Одна шкала на обидві лінії, за потреби з розривом посередині (tempAxis): холодніша лінія завжди нижче.
+  const axis = tempAxis(line, out);
+  const broken = axis.bands.length > 1;
+  const bandH = broken ? BAND_H : PH;
+  const ph = broken ? BAND_H * 2 + GAP_H : PH;
+  const iw = Math.max(1, w - PAD.l - PAD.r);
   const x = (t: number) => PAD.l + ((t - from) / span) * iw;
-  const y = (v: number) => PAD.t + PH - ((v - scale.lo) / (scale.hi - scale.lo)) * PH;
-  const yOut = (v: number) => (outScale ? PAD.t + PH - ((v - outScale.lo) / (outScale.hi - outScale.lo)) * PH : 0);
+  const y = (v: number) => PAD.t + ph - axisY(axis, v, bandH, GAP_H);
+  // Малюємо усереднені лінії; точні покази лишаються для підказки.
+  const homeRuns = smoothRuns(line.runs);
+  const outRuns = out ? smoothRuns(out.runs) : null;
   const step = span <= 6 * H ? 1 : span <= 12 * H ? 3 : 6;
   const ticks = hourTicks(from, now, step);
   const bands = outages
@@ -191,12 +195,15 @@ function Plot({
     .map(s => ({ a: Math.max(s.from, from), b: Math.min(s.to, now) }));
   const first = line.runs[0][0].t;
   const period = span >= CLIMATE_WINDOW_MS - 60_000 ? "за 24 години" : `з ${dayStart(first) === dayStart(now) ? clock(first) : time(first)}`;
-  const lastRun = line.runs[line.runs.length - 1];
+  const lastRun = homeRuns[homeRuns.length - 1];
   const last = lastRun[lastRun.length - 1];
-  const outLastRun = out ? out.runs[out.runs.length - 1] : null;
+  const outLastRun = outRuns ? outRuns[outRuns.length - 1] : null;
   const outLast = outLastRun ? outLastRun[outLastRun.length - 1] : null;
+  // У підказці — точні покази; точки підказки стоять на намальованих (усереднених) лініях.
   const value = at === null ? null : valueAt(line.runs, at);
   const outValue = at === null || !out ? null : valueAt(out.runs, at);
+  const drawn = at === null ? null : valueAt(homeRuns, at, true);
+  const outDrawn = at === null || !outRuns ? null : valueAt(outRuns, at, true);
 
   function move(e: PointerEvent<HTMLDivElement>) {
     const r = e.currentTarget.getBoundingClientRect();
@@ -214,9 +221,12 @@ function Plot({
     .join(" · ");
   const tipW = Math.min(iw, 24 + tip.length * 7.4);
   const tipX = at === null ? 0 : Math.max(PAD.l, Math.min(PAD.l + iw - tipW, x(at) - tipW / 2));
+  const gap = broken ? `розрив шкали між ${tick(axis.bands[0].hi)} і ${tick(axis.bands[1].lo)}` : null;
   const label =
     `Температура ${period}: вдома зараз ${deg(temp)}°, від ${deg(line.min)}° до ${deg(line.max)}°` +
-    (out ? `; надворі від ${deg(out.min)}° до ${deg(out.max)}°; у кожної лінії своя шкала` : "");
+    (out ? `; надворі від ${deg(out.min)}° до ${deg(out.max)}°; холодніша лінія нижче` : "") +
+    (gap ? `; ${gap}` : "");
+  const gapMid = PAD.t + BAND_H + GAP_H / 2;
 
   return (
     <>
@@ -227,6 +237,7 @@ function Plot({
             від {deg(line.min)}° до {deg(line.max)}°
           </span>
         )}
+        {gap && <span>{gap}</span>}
       </p>
       <div
         className="soc-plot"
@@ -237,7 +248,7 @@ function Plot({
         onPointerCancel={() => setAt(null)}
       >
         {w > 0 && (
-          <svg width={w} height={PAD.t + PH + PAD.b} role="img" aria-label={label}>
+          <svg width={w} height={PAD.t + ph + PAD.b} role="img" aria-label={label}>
             <defs>
               <linearGradient id="temp-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0.28 }} />
@@ -245,39 +256,48 @@ function Plot({
               </linearGradient>
             </defs>
             {bands.map(b => (
-              <rect key={b.a} className="soc-band" x={x(b.a)} y={PAD.t} width={Math.max(2, x(b.b) - x(b.a))} height={PH} rx={3} />
+              <rect key={b.a} className="soc-band" x={x(b.a)} y={PAD.t} width={Math.max(2, x(b.b) - x(b.a))} height={ph} rx={3} />
             ))}
-            {scale.ticks.map(g => (
-              <g key={g}>
-                <line className="soc-grid" x1={PAD.l} x2={PAD.l + iw} y1={y(g)} y2={y(g)} />
-                <text className="soc-axis" x={PAD.l - 8} y={y(g) + 4} textAnchor="end">
-                  {tick(g)}
-                </text>
+            {axis.bands.map(band => (
+              <g key={band.who}>
+                {band.ticks.map(g => (
+                  <g key={g}>
+                    <line className="soc-grid" x1={PAD.l} x2={PAD.l + iw} y1={y(g)} y2={y(g)} />
+                    <text className="soc-axis" x={PAD.l - 8} y={y(g) + 4} textAnchor="end">
+                      {tick(g)}
+                    </text>
+                  </g>
+                ))}
+                {/* Кольорова рейка вздовж смуги: чия це частина шкали. Підписи лишаються кольором тексту. */}
+                {broken && (
+                  <line
+                    className={`axis-rail axis-rail-${band.who}`}
+                    x1={PAD.l - 3}
+                    x2={PAD.l - 3}
+                    y1={y(band.hi)}
+                    y2={y(band.lo)}
+                  />
+                )}
               </g>
             ))}
-            {outScale && (
-              <>
-                {/* Кольорові рейки вздовж осей: яка шкала чия. Підписи лишаються звичайним кольором тексту. */}
-                <line className="axis-rail axis-rail-home" x1={PAD.l - 3} x2={PAD.l - 3} y1={PAD.t} y2={PAD.t + PH} />
-                <line className="axis-rail axis-rail-out" x1={PAD.l + iw + 3} x2={PAD.l + iw + 3} y1={PAD.t} y2={PAD.t + PH} />
-                {outScale.ticks.map(g => (
-                  <text key={g} className="soc-axis" x={PAD.l + iw + 9} y={yOut(g) + 4} textAnchor="start">
-                    {tick(g)}
-                  </text>
-                ))}
-              </>
+            {broken && (
+              <g className="axis-break" aria-hidden="true">
+                {/* Знак розриву шкали: дві косі риски на осі між смугами. */}
+                <line x1={PAD.l - 8} x2={PAD.l + 2} y1={gapMid + 1} y2={gapMid - 5} />
+                <line x1={PAD.l - 8} x2={PAD.l + 2} y1={gapMid + 6} y2={gapMid} />
+              </g>
             )}
             {ticks.map(t => (
-              <text key={t} className="soc-axis" x={x(t)} y={PAD.t + PH + 20} textAnchor="middle">
+              <text key={t} className="soc-axis" x={x(t)} y={PAD.t + ph + 20} textAnchor="middle">
                 {clock(t)}
               </text>
             ))}
             {/* Заливка лише під лінією «вдома» і лише коли вона на графіку одна: з двома лініями вона б зливалася. */}
             {!out &&
-              line.runs
+              homeRuns
                 .filter(run => run.length >= 2)
                 .map(run => {
-                  const floor = y(scale.lo);
+                  const floor = y(axis.bands[0].lo);
                   const d = path(run, x, y);
                   return (
                     <path
@@ -288,27 +308,27 @@ function Plot({
                     />
                   );
                 })}
-            {out?.runs.map(run =>
+            {outRuns?.map(run =>
               run.length < 2 ? (
-                <circle key={run[0].t} className="out-lone" cx={x(run[0].t)} cy={yOut(run[0].v)} r={2.5} />
+                <circle key={run[0].t} className="out-lone" cx={x(run[0].t)} cy={y(run[0].v)} r={2.5} />
               ) : (
-                <path key={run[0].t} className="soc-line out-line" d={path(run, x, yOut)} pathLength={1} />
+                <path key={run[0].t} className="soc-line out-line" d={path(run, x, y)} pathLength={1} />
               ),
             )}
-            {line.runs.map(run =>
+            {homeRuns.map(run =>
               run.length < 2 ? (
                 <circle key={run[0].t} className="climate-lone" cx={x(run[0].t)} cy={y(run[0].v)} r={2.5} />
               ) : (
                 <path key={run[0].t} className="soc-line" d={path(run, x, y)} pathLength={1} />
               ),
             )}
-            {outLast && <circle className="soc-dot out-dot" cx={x(outLast.t)} cy={yOut(outLast.v)} r={4} />}
+            {outLast && <circle className="soc-dot out-dot" cx={x(outLast.t)} cy={y(outLast.v)} r={4} />}
             <circle className="soc-dot" cx={x(last.t)} cy={y(last.v)} r={5} />
             {at !== null && (
               <g className="soc-tip">
-                <line x1={x(at)} x2={x(at)} y1={PAD.t} y2={PAD.t + PH} />
-                {outValue !== null && <circle className="out-tip" cx={x(at)} cy={yOut(outValue)} r={4} />}
-                {value !== null && <circle cx={x(at)} cy={y(value)} r={5} />}
+                <line x1={x(at)} x2={x(at)} y1={PAD.t} y2={PAD.t + ph} />
+                {outDrawn !== null && <circle className="out-tip" cx={x(at)} cy={y(outDrawn)} r={4} />}
+                {drawn !== null && <circle cx={x(at)} cy={y(drawn)} r={5} />}
                 <rect x={tipX} y={2} width={tipW} height={26} rx={13} />
                 <text x={tipX + tipW / 2} y={19} textAnchor="middle">
                   {tip}
@@ -324,11 +344,9 @@ function Plot({
             <>
               <li>
                 <i className="sw sw-home" aria-hidden="true" /> вдома <b>{range(line.min, line.max)}</b>
-                <span className="climate-axis-note">шкала ліворуч</span>
               </li>
               <li>
                 <i className="sw sw-out" aria-hidden="true" /> надворі <b>{range(out.min, out.max)}</b>
-                <span className="climate-axis-note">шкала праворуч</span>
               </li>
             </>
           )}

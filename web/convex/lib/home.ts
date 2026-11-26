@@ -236,8 +236,11 @@ export function climateLine(samples: ClimateSample[], view: ClimateView | null, 
   return { from, to: now, runs, min: Math.min(...values), max: Math.max(...values) };
 }
 
-/** Значення в момент `t`: лінійно між сусідніми точками відрізка. У розриві — null. */
-export function valueAt(runs: ClimatePoint[][], t: number): number | null {
+/**
+ * Значення в момент `t`: лінійно між сусідніми точками відрізка. У розриві — null.
+ * `exact` — без округлення до десятих (для положення точки на згладженій лінії).
+ */
+export function valueAt(runs: ClimatePoint[][], t: number, exact = false): number | null {
   for (const run of runs) {
     if (t < run[0].t || t > run[run.length - 1].t) continue;
     for (let i = 1; i < run.length; i++) {
@@ -245,7 +248,8 @@ export function valueAt(runs: ClimatePoint[][], t: number): number | null {
         const a = run[i - 1];
         const b = run[i];
         const k = b.t === a.t ? 1 : (t - a.t) / (b.t - a.t);
-        return round1(a.v + (b.v - a.v) * k);
+        const v = a.v + (b.v - a.v) * k;
+        return exact ? v : round1(v);
       }
     }
     return run[0].v;
@@ -279,6 +283,99 @@ export function tempScale(min: number, max: number, tight = false): { lo: number
     else hi++;
   }
   return { lo, hi, ticks: [lo, (lo + hi) / 2, hi] };
+}
+
+// ---------- усереднення лінії для показу ----------
+
+/** Крок рівної сітки, на яку перекладається лінія перед усередненням. */
+export const SMOOTH_STEP_MS = 5 * 60 * 1000;
+/** Ширина усереднення (сигма гаусового вікна). */
+export const SMOOTH_SIGMA_MS = 25 * 60 * 1000;
+
+/**
+ * Усереднена лінія для малювання: кожен відрізок перекладається на рівну сітку й згладжується
+ * гаусовим вікном. Вікно симетричне і звужується до країв відрізка, тому лінія не запізнюється,
+ * а її початок і кінець (зокрема «зараз») лишаються точними. Значення не виходять за межі вихідних.
+ * Точні покази лишаються у вихідних відрізках: їх показує підказка.
+ */
+export function smoothRuns(runs: ClimatePoint[][], step = SMOOTH_STEP_MS, sigma = SMOOTH_SIGMA_MS): ClimatePoint[][] {
+  return runs.map(run => {
+    const t0 = run[0].t;
+    const t1 = run[run.length - 1].t;
+    if (run.length < 3 || t1 <= t0) return run;
+    const n = Math.max(1, Math.ceil((t1 - t0) / step));
+    const dt = (t1 - t0) / n;
+    const raw: number[] = [];
+    let j = 1;
+    for (let k = 0; k <= n; k++) {
+      const t = k === n ? t1 : t0 + k * dt;
+      while (j < run.length - 1 && run[j].t < t) j++;
+      const a = run[j - 1];
+      const b = run[j];
+      raw.push(a.v + (b.v - a.v) * (b.t === a.t ? 1 : (t - a.t) / (b.t - a.t)));
+    }
+    const reach = Math.max(1, Math.round((3 * sigma) / dt));
+    return raw.map((value, k) => {
+      const t = k === n ? t1 : t0 + k * dt;
+      const w = Math.min(reach, k, n - k);
+      if (w === 0) return { t, v: value };
+      const s = w / 3;
+      let sum = 0;
+      let weight = 0;
+      for (let i = -w; i <= w; i++) {
+        const g = Math.exp(-(i * i) / (2 * s * s));
+        sum += g * raw[k + i];
+        weight += g;
+      }
+      return { t, v: sum / weight };
+    });
+  });
+}
+
+// ---------- шкала графіка температури ----------
+
+/** Смуга шкали: свій відрізок градусів зі своїми позначками. `who` — чия лінія в ній лежить. */
+export type TempBand = { lo: number; hi: number; ticks: number[]; who: "home" | "out" | "both" };
+/** Шкала графіка: одна смуга або дві з розривом між ними, знизу вгору (холодніша перша). */
+export type TempAxis = { bands: TempBand[] };
+/** Розрив роблять, лише якщо між шкалами дому й вулиці пропущено щонайменше стільки градусів. */
+export const AXIS_BREAK_MIN = 4;
+
+/**
+ * Шкала для графіка «вдома + надворі». Вона одна й зростає знизу вгору, тому холодніша лінія завжди
+ * нижче, а перетнутися лінії можуть лише там, де температури збіглися. Коли вдома й надворі різняться
+ * сильно, порожню середину шкали вирізано: лишаються дві смуги (кожна підібрана під свою лінію)
+ * з розривом між ними. Коли діапазони близькі або перекриваються — одна спільна смуга.
+ * Без погоди — звичайна шкала для однієї лінії.
+ */
+export function tempAxis(home: { min: number; max: number }, out: { min: number; max: number } | null): TempAxis {
+  if (!out) return { bands: [{ ...tempScale(home.min, home.max), who: "home" }] };
+  const h: TempBand = { ...tempScale(home.min, home.max, true), who: "home" };
+  const o: TempBand = { ...tempScale(out.min, out.max, true), who: "out" };
+  const [cold, warm] = o.lo <= h.lo ? [o, h] : [h, o];
+  if (warm.lo - cold.hi >= AXIS_BREAK_MIN) return { bands: [cold, warm] };
+  return { bands: [{ ...tempScale(Math.min(home.min, out.min), Math.max(home.max, out.max), true), who: "both" }] };
+}
+
+/**
+ * Висота значення над низом графіка в пікселях. `bandH` — висота однієї смуги, `gapH` — розриву.
+ * Функція строго зростає: значення в розриві лягають у розрив, нижчі за шкалу — нижче за неї.
+ */
+export function axisY(axis: TempAxis, v: number, bandH: number, gapH: number): number {
+  const { bands } = axis;
+  let base = 0;
+  for (let i = 0; i < bands.length; i++) {
+    const b = bands[i];
+    if (v <= b.hi || i === bands.length - 1) {
+      if (i > 0 && v < b.lo) {
+        const prev = bands[i - 1];
+        return base - gapH + ((v - prev.hi) / (b.lo - prev.hi)) * gapH;
+      }
+      return base + ((v - b.lo) / (b.hi - b.lo)) * bandH;
+    }
+    base += bandH + gapH;
+  }
+  return base;
 }
 
 /** «23,8»: температура з однією цифрою після коми. */

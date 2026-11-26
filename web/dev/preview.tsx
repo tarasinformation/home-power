@@ -1,7 +1,9 @@
 // Сторінка статусу на вигаданих даних: без входу й без бекенда, лише для розробки.
 // Відкривається під `npm run dev` за адресою /dev/preview.html; у зібраний сайт не потрапляє.
 // Варіанти: ?case=silent (плата-читач мовчить), ?case=nohub (не чує хаб), ?case=few (мало даних),
-// ?case=none (плати-читача ще немає), ?case=noweather (без погоди надворі).
+// ?case=none (плати-читача ще немає), ?case=noweather (без погоди надворі),
+// ?case=summer (літо: надворі то холодніше, то тепліше, ніж удома — лінії перетинаються),
+// ?case=heat (спека: надворі значно тепліше, шкала з розривом і лінія вулиці вгорі).
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { StatusView } from "../src/Status";
@@ -34,7 +36,8 @@ const soc: SocSample[] = [
 function tempAt(t: number): number {
   const wave = 0.8 * Math.sin(((t / H) % 24) * (Math.PI / 12));
   const cold = t < outage.from ? 0 : t < outage.to ? ((t - outage.from) / (outage.to - outage.from)) * 2.6 : Math.max(0, 2.6 - ((t - outage.to) / (3 * H)) * 2.6);
-  return Math.round((22.6 + wave - cold) * 10) / 10;
+  const base = kind === "summer" ? 24.6 : kind === "heat" ? 23.4 : 22.6;
+  return Math.round((base + wave - cold) * 10) / 10;
 }
 const climate: ClimateSample[] = [];
 if (kind !== "none") {
@@ -54,7 +57,9 @@ const shown = kind === "silent" ? climate.filter(s => s.t <= seen) : kind === "n
 
 /** Вигадана температура надворі: мороз уночі, близько нуля вдень. */
 function outAt(t: number): number {
-  return Math.round((-1.5 + 3.2 * Math.sin((((t / H) % 24) - 9) * (Math.PI / 12))) * 10) / 10;
+  const base = kind === "summer" ? 24 : kind === "heat" ? 36 : -1.5;
+  const swing = kind === "summer" ? 6 : 3.2;
+  return Math.round((base + swing * Math.sin((((t / H) % 24) - 9) * (Math.PI / 12))) * 10) / 10;
 }
 const outdoorSamples: OutdoorSample[] = [];
 for (let t = now - 26 * H; t <= now - 5 * MIN; t += 15 * MIN) outdoorSamples.push({ t, temp: outAt(t) });
