@@ -251,8 +251,8 @@ function Plot({
           <svg width={w} height={PAD.t + ph + PAD.b} role="img" aria-label={label}>
             <defs>
               <linearGradient id="temp-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0.28 }} />
-                <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
+                <stop offset="0" style={{ stopColor: "var(--line-home)", stopOpacity: 0.28 }} />
+                <stop offset="1" style={{ stopColor: "var(--line-home)", stopOpacity: 0 }} />
               </linearGradient>
             </defs>
             {bands.map(b => (

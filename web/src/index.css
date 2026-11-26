@@ -20,7 +20,7 @@
   --bolt: #e2a300;
 
   --accent: #1f6fe0;
-  --out: #eb6834; /* друга лінія на графіку температури: надворі */
+  --warm: #eb6834; /* тепла лінія на графіку температури: вдома */
   --green: #2ea64f;
   --red: #e0443b;
   --amber: #d99a00;
@@ -53,7 +53,7 @@
     --bolt: #f6c344;
 
     --accent: #3a8ef2;
-    --out: #d95926;
+    --warm: #d95926;
     --green: #47c063;
     --red: #ff5d54;
     --amber: #f2b234;
@@ -742,7 +742,7 @@ p {
   margin-top: 12px;
 }
 .climate-lone {
-  fill: var(--accent);
+  fill: var(--line-home);
 }
 .climate.stale .station-value .num {
   color: var(--muted);
@@ -777,16 +777,30 @@ p {
 .climate-out.stale .climate-out-main {
   color: var(--muted);
 }
-.out-line {
-  stroke: var(--out);
+/* Кольори ліній температури: вдома — теплий помаранчевий, надворі — блакитний (колір акценту). */
+.climate {
+  --line-home: var(--warm);
+  --line-out: var(--accent);
+}
+.climate .soc-line {
+  stroke: var(--line-home);
+}
+.climate .out-line {
+  stroke: var(--line-out);
   stroke-width: 2;
 }
-.out-dot,
-.out-lone {
-  fill: var(--out);
+.climate .soc-dot {
+  fill: var(--line-home);
 }
-.soc-tip circle.out-tip {
-  stroke: var(--out);
+.climate .out-dot,
+.climate .out-lone {
+  fill: var(--line-out);
+}
+.climate .soc-tip circle {
+  stroke: var(--line-home);
+}
+.climate .soc-tip circle.out-tip {
+  stroke: var(--line-out);
 }
 /* Шкала з розривом на графіку температури: кольорова рейка вздовж смуги каже, чия це частина шкали. */
 .axis-rail {
@@ -794,10 +808,10 @@ p {
   stroke-linecap: round;
 }
 .axis-rail-home {
-  stroke: var(--accent);
+  stroke: var(--line-home);
 }
 .axis-rail-out {
-  stroke: var(--out);
+  stroke: var(--line-out);
 }
 .axis-break line {
   stroke: var(--faint);
@@ -832,10 +846,10 @@ p {
   border-radius: 2px;
 }
 .sw-home {
-  background: var(--accent);
+  background: var(--line-home);
 }
 .sw-out {
-  background: var(--out);
+  background: var(--line-out);
 }
 .climate-credit {
   margin-top: 10px;
