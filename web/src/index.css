@@ -788,6 +788,21 @@ p {
 .soc-tip circle.out-tip {
   stroke: var(--out);
 }
+/* Дві шкали на графіку температури: кольорова рейка вздовж осі каже, чия це шкала. */
+.axis-rail {
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.axis-rail-home {
+  stroke: var(--accent);
+}
+.axis-rail-out {
+  stroke: var(--out);
+}
+.climate-axis-note {
+  color: var(--faint);
+  font-size: 12px;
+}
 .climate-legend {
   list-style: none;
   display: flex;

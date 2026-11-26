@@ -240,6 +240,20 @@ test("climateLine: вікно — остання доба, лівий край �
   assert.equal(climateLine([], null, now), null);
 });
 
+test("tempScale: щільна шкала для графіка з двома осями — від 2° і з меншим запасом", () => {
+  assert.deepEqual(tempScale(21.9, 22.4, true), { lo: 21, hi: 23, ticks: [21, 22, 23] });
+  assert.deepEqual(tempScale(22, 22, true), { lo: 21, hi: 23, ticks: [21, 22, 23] });
+  assert.deepEqual(tempScale(-3.6, 4.1, true), { lo: -4, hi: 6, ticks: [-4, 1, 6] });
+  // Дані завжди всередині шкали, висота парна, середня позначка ціла.
+  for (const [min, max] of [[20.95, 21.05], [22.8, 23.3], [-12.4, -7.7], [-0.1, 0.1], [18, 26.5]]) {
+    const s = tempScale(min, max, true);
+    assert.ok(s.lo <= min && s.hi >= max, `${min}…${max} поза шкалою ${s.lo}…${s.hi}`);
+    assert.equal((s.hi - s.lo) % 2, 0);
+    assert.ok(s.hi - s.lo >= 2);
+    assert.deepEqual(s.ticks, [s.lo, (s.lo + s.hi) / 2, s.hi]);
+  }
+});
+
 test("tempScale: цілі градуси, щонайменше 4° і три позначки", () => {
   assert.deepEqual(tempScale(23.4, 24.1), { lo: 22, hi: 26, ticks: [22, 24, 26] });
   assert.deepEqual(tempScale(22, 22), { lo: 20, hi: 24, ticks: [20, 22, 24] });

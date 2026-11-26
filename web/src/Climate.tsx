@@ -21,6 +21,8 @@ import {
 
 const H = 3600_000;
 const PAD = { l: 36, r: 14, t: 14, b: 28 };
+/** Правий відступ, коли праворуч стоїть друга шкала (надворі). */
+const PAD_R_AXIS = 38;
 const PH = 120;
 
 /** Погода надворі для картки: поточні значення, історія температури й назва місця. */
@@ -33,6 +35,11 @@ function staleNote(c: ClimateView): string | null {
   return null;
 }
 
+/** Позначка шкали: цілі градуси зі справжнім мінусом. */
+function tick(v: number): string {
+  return `${String(v).replace("-", "−")}°`;
+}
+
 /** «21,9…22,4°» або «22,0°», якщо значення не змінювалось. */
 function range(min: number, max: number): string {
   return min === max ? `${deg(min)}°` : `${deg(min)}…${deg(max)}°`;
@@ -40,7 +47,9 @@ function range(min: number, max: number): string {
 
 /**
  * Температура вдома: поточні покази, вологість і лінія за останню добу з відключеннями позаду.
- * Якщо бекенд збирає погоду, поруч — температура надворі на тій самій шкалі та поточна погода.
+ * Якщо бекенд збирає погоду, на тому самому графіку — температура надворі з власною шкалою праворуч
+ * (вдома й надворі різняться на десятки градусів, на спільній шкалі обидві лінії були б майже прямі)
+ * та поточна погода.
  * Нічого не малює, поки плата-читач хаба не передала жодного показу.
  */
 export function Climate({
@@ -163,11 +172,16 @@ function Plot({
   const { from } = line;
   const span = line.to - from;
   const out = outdoorLine(outdoor.samples, outdoor.weather, from, line.to);
-  // Обидві лінії на одній шкалі градусів.
-  const scale = tempScale(Math.min(line.min, out?.min ?? line.min), Math.max(line.max, out?.max ?? line.max));
-  const iw = Math.max(1, w - PAD.l - PAD.r);
+  // Дві шкали градусів на одному графіку: ліворуч — вдома, праворуч — надворі. Кожна підібрана під свою
+  // лінію, тому висота ліній і місця, де вони перетинаються, нічого не означають: порівнювати можна
+  // лише форму й час змін. Обидві шкали мають по три позначки на тих самих висотах, тож сітка одна.
+  const scale = tempScale(line.min, line.max, out !== null);
+  const outScale = out ? tempScale(out.min, out.max, true) : null;
+  const padR = out ? PAD_R_AXIS : PAD.r;
+  const iw = Math.max(1, w - PAD.l - padR);
   const x = (t: number) => PAD.l + ((t - from) / span) * iw;
   const y = (v: number) => PAD.t + PH - ((v - scale.lo) / (scale.hi - scale.lo)) * PH;
+  const yOut = (v: number) => (outScale ? PAD.t + PH - ((v - outScale.lo) / (outScale.hi - outScale.lo)) * PH : 0);
   const step = span <= 6 * H ? 1 : span <= 12 * H ? 3 : 6;
   const ticks = hourTicks(from, now, step);
   const bands = outages
@@ -200,7 +214,7 @@ function Plot({
   const tipX = at === null ? 0 : Math.max(PAD.l, Math.min(PAD.l + iw - tipW, x(at) - tipW / 2));
   const label =
     `Температура ${period}: вдома зараз ${deg(temp)}°, від ${deg(line.min)}° до ${deg(line.max)}°` +
-    (out ? `; надворі від ${deg(out.min)}° до ${deg(out.max)}°` : "");
+    (out ? `; надворі від ${deg(out.min)}° до ${deg(out.max)}°; у кожної лінії своя шкала` : "");
 
   return (
     <>
@@ -235,10 +249,22 @@ function Plot({
               <g key={g}>
                 <line className="soc-grid" x1={PAD.l} x2={PAD.l + iw} y1={y(g)} y2={y(g)} />
                 <text className="soc-axis" x={PAD.l - 8} y={y(g) + 4} textAnchor="end">
-                  {g}°
+                  {tick(g)}
                 </text>
               </g>
             ))}
+            {outScale && (
+              <>
+                {/* Кольорові рейки вздовж осей: яка шкала чия. Підписи лишаються звичайним кольором тексту. */}
+                <line className="axis-rail axis-rail-home" x1={PAD.l - 3} x2={PAD.l - 3} y1={PAD.t} y2={PAD.t + PH} />
+                <line className="axis-rail axis-rail-out" x1={PAD.l + iw + 3} x2={PAD.l + iw + 3} y1={PAD.t} y2={PAD.t + PH} />
+                {outScale.ticks.map(g => (
+                  <text key={g} className="soc-axis" x={PAD.l + iw + 9} y={yOut(g) + 4} textAnchor="start">
+                    {tick(g)}
+                  </text>
+                ))}
+              </>
+            )}
             {ticks.map(t => (
               <text key={t} className="soc-axis" x={x(t)} y={PAD.t + PH + 20} textAnchor="middle">
                 {clock(t)}
@@ -262,9 +288,9 @@ function Plot({
                 })}
             {out?.runs.map(run =>
               run.length < 2 ? (
-                <circle key={run[0].t} className="out-lone" cx={x(run[0].t)} cy={y(run[0].v)} r={2.5} />
+                <circle key={run[0].t} className="out-lone" cx={x(run[0].t)} cy={yOut(run[0].v)} r={2.5} />
               ) : (
-                <path key={run[0].t} className="soc-line out-line" d={path(run, x, y)} pathLength={1} />
+                <path key={run[0].t} className="soc-line out-line" d={path(run, x, yOut)} pathLength={1} />
               ),
             )}
             {line.runs.map(run =>
@@ -274,12 +300,12 @@ function Plot({
                 <path key={run[0].t} className="soc-line" d={path(run, x, y)} pathLength={1} />
               ),
             )}
-            {outLast && <circle className="soc-dot out-dot" cx={x(outLast.t)} cy={y(outLast.v)} r={4} />}
+            {outLast && <circle className="soc-dot out-dot" cx={x(outLast.t)} cy={yOut(outLast.v)} r={4} />}
             <circle className="soc-dot" cx={x(last.t)} cy={y(last.v)} r={5} />
             {at !== null && (
               <g className="soc-tip">
                 <line x1={x(at)} x2={x(at)} y1={PAD.t} y2={PAD.t + PH} />
-                {outValue !== null && <circle className="out-tip" cx={x(at)} cy={y(outValue)} r={4} />}
+                {outValue !== null && <circle className="out-tip" cx={x(at)} cy={yOut(outValue)} r={4} />}
                 {value !== null && <circle cx={x(at)} cy={y(value)} r={5} />}
                 <rect x={tipX} y={2} width={tipW} height={26} rx={13} />
                 <text x={tipX + tipW / 2} y={19} textAnchor="middle">
@@ -296,9 +322,11 @@ function Plot({
             <>
               <li>
                 <i className="sw sw-home" aria-hidden="true" /> вдома <b>{range(line.min, line.max)}</b>
+                <span className="climate-axis-note">шкала ліворуч</span>
               </li>
               <li>
                 <i className="sw sw-out" aria-hidden="true" /> надворі <b>{range(out.min, out.max)}</b>
+                <span className="climate-axis-note">шкала праворуч</span>
               </li>
             </>
           )}
