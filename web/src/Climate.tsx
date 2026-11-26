@@ -237,7 +237,6 @@ function Plot({
             від {deg(line.min)}° до {deg(line.max)}°
           </span>
         )}
-        {gap && <span>{gap}</span>}
       </p>
       <div
         className="soc-plot"
