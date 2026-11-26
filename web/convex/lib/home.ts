@@ -261,11 +261,12 @@ export function climateAt(line: ClimateLine, t: number): number | null {
 /**
  * Вертикальна шкала: цілі градуси з запасом навколо даних, щонайменше 4° заввишки,
  * три позначки (низ, середина, верх).
- * `tight` — щільна шкала для графіка з двома осями, де кожна лінія має власну: запас менший,
- * а найменша висота 2°, щоб і невеликі коливання температури вдома було видно.
+ * `tight` — щільна шкала для графіка з двома осями, де кожна лінія має власну: без запасу
+ * (межі — найближчі цілі градуси), найменша висота 2°, а зайвий градус для парної висоти додається
+ * з того боку, де до даних ближче. Так і невеликі коливання температури вдома добре видно.
  */
 export function tempScale(min: number, max: number, tight = false): { lo: number; hi: number; ticks: number[] } {
-  const pad = tight ? 0.2 : 0.5;
+  const pad = tight ? 0 : 0.5;
   const least = tight ? 2 : 4;
   let lo = Math.floor(min - pad);
   let hi = Math.ceil(max + pad);
@@ -273,7 +274,10 @@ export function tempScale(min: number, max: number, tight = false): { lo: number
     hi++;
     if (hi - lo < least) lo--;
   }
-  if ((hi - lo) % 2) hi++;
+  if ((hi - lo) % 2) {
+    if (tight && min - lo < hi - max) lo--;
+    else hi++;
+  }
   return { lo, hi, ticks: [lo, (lo + hi) / 2, hi] };
 }
 

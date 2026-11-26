@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { clock, dayStart, hourTicks, time, type Segment } from "../convex/lib/logic";
+import { smoothPath } from "./curve";
 import {
   CLIMATE_WINDOW_MS,
   climateLine,
@@ -144,8 +145,9 @@ function OutdoorNow({ weather, place, now }: { weather: WeatherNow; place: strin
   );
 }
 
+/** Плавна лінія через покази: проходить через кожну точку й не виходить за сусідні значення. */
 function path(run: ClimatePoint[], x: (t: number) => number, y: (v: number) => number): string {
-  return run.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ");
+  return smoothPath(run.map(p => ({ x: x(p.t), y: y(p.v) })));
 }
 
 function Plot({
